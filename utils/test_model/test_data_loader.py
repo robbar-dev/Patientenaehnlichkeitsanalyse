@@ -12,35 +12,39 @@ if project_root not in sys.path:
 # funktioniert erst nach Hauptprojektverzeichnis
 from training.data_loader import LungCTIterableDataset, collate_fn
 
-
 def test_data_loading(dataset):
-    print("\n\Ueberprüfung der geladenen Daten:")
+    print("\nÜberprüfung der geladenen Daten:")
     for i, row in dataset.df.iterrows():
         print(f"Patient ID: {row['pid']}, Study Year: {row['study_yr']}, Combination: {row['combination']}")
         if i == 10:  # Zeige nur die ersten 10 Patienten
             break
 
-def visualize_patches(patches, pid, study_yr, num_patches=5):
+def visualize_patches_for_slices(patches, pid, study_yr):
     """
-    Visualisiere mehrere Patches eines Volumens.
+    Visualisiere alle Patches von den ersten drei Slices.
     """
-    num_patches = min(num_patches, len(patches))  # Falls weniger Patches vorhanden sind
-    for idx, patch in enumerate(patches[:num_patches]):
-        plt.figure(figsize=(10, 4))
-        for i in range(patch.shape[0]):  # 3 Slices (Channels)
-            plt.subplot(1, 3, i+1)
-            plt.imshow(patch[i].cpu().numpy(), cmap='gray')
-            plt.title(f"Slice {i+1}")
+    print(f"\nVisualisiere Patches von Patient ID: {pid}, Study Year: {study_yr}")
+    num_patches = patches.shape[0]  # Gesamtanzahl der Patches
+    plt.figure(figsize=(15, 5))
+    
+    for idx in range(num_patches):
+        patch = patches[idx]
+        for slice_idx in range(patch.shape[0]):  # 3 Slices (Channels)
+            plt.subplot(num_patches, 3, idx * 3 + slice_idx + 1)
+            plt.imshow(patch[slice_idx].cpu().numpy(), cmap='gray')
             plt.axis('off')
-        plt.suptitle(f"Patient ID: {pid}, Study Year: {study_yr}, Patch: {idx+1}")
-        plt.show()
+            plt.title(f"Slice {slice_idx + 1}")
 
-def test_visualize_multiple_patches(loader, num_patches=5):
-    print("\nVisualisiere mehrere Patches pro Volume:")
+    plt.suptitle(f"Patient ID: {pid}, Study Year: {study_yr}")
+    plt.tight_layout()
+    plt.show()
+
+def test_visualize_all_patches(loader):
+    print("\nVisualisiere alle Patches für die ersten Patienten:")
     for imgs, labels, pids, study_yrs in loader:
-        for i in range(len(pids)):  # Iteriere durch alle Patienten im Batch
-            visualize_patches(imgs[i:i+1], pids[i], study_yrs[i], num_patches=num_patches)
-        break  # Zeige nur den ersten Batch
+        for i in range(imgs.shape[0]):
+            visualize_patches_for_slices(imgs[i:i+1], pids[i], study_yrs[i])
+        break  # Beende nach dem ersten Batch
 
 def test_loader_performance(loader):
     print("\nTeste Batchgrößen und Ladezeiten:")
@@ -100,8 +104,8 @@ if __name__ == "__main__":
 
     loader = DataLoader(
         dataset,
-        batch_size=2,
-        shuffle=False,  
+        batch_size=20,
+        shuffle=False,  # Shuffle entfernt, da nicht erlaubt mit IterableDataset
         num_workers=4,
         pin_memory=True,
         collate_fn=collate_fn
@@ -109,6 +113,6 @@ if __name__ == "__main__":
 
     # Teste die verschiedenen Funktionen
     test_data_loading(dataset)
-    test_visualize_multiple_patches(loader, num_patches=5)
+    test_visualize_all_patches(loader)
     test_loader_performance(loader)
     test_training_loop(loader, device)
