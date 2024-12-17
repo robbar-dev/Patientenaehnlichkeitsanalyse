@@ -4,7 +4,7 @@ import seaborn as sns
 
 # Laden der image_statistics.csv Datei mit spezifizierter Kodierung
 image_stats = pd.read_csv(
-    'D:\\thesis_robert\\NLST_subset_v3_nifti_resampled_normalized\\validation_resampling_normalization\\image_statistics.csv',
+    r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel\validation_resampling_normalization\image_statistics.csv",
     encoding='latin1'
 )
 

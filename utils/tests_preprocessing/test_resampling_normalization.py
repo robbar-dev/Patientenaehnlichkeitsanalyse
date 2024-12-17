@@ -129,9 +129,9 @@ def analyze_images(input_dir, output_dir, sample_size):
     print(f"Metadatenvergleich gespeichert in {metadata_comparison_file}")
 
 def main():
-    input_dir = r"D:\thesis_robert\NLST_subset_v3_nifti_resampled_normalized"
-    output_dir = r"D:\thesis_robert\NLST_subset_v3_nifti_resampled_normalized\validation_resampling_normalization"
-    sample_size = 50  # Stichprobengröße
+    input_dir = r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel"
+    output_dir = r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel\validation_resampling_normalization"
+    sample_size = 100  # Stichprobengröße
 
     analyze_images(input_dir, output_dir, sample_size)
 

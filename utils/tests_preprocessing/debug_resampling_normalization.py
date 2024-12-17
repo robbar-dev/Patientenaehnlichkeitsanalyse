@@ -1,6 +1,3 @@
-
-
-
 import os
 import gzip
 import argparse
@@ -67,3 +64,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+#python utils\tests_preprocessing\debug_resampling_normalization.py --input_dir "D:\thesis_robert\subset_v3\NLST_subset_v3_nifti_unverarbeitet" --output_file "D:\thesis_robert\corrupted_pids"

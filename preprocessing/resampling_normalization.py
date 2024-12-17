@@ -28,7 +28,7 @@ logging.basicConfig(
 def resample_and_normalize(
     input_dir,
     output_dir,
-    target_spacing=(1.0, 1.0, 1.0),
+    target_spacing=(3.0, 3.0, 3.0),
     interpolation="trilinear",
     visualize=False,
     batch_size=4,
@@ -189,7 +189,7 @@ def main():
     parser = argparse.ArgumentParser(description="Resampling und Normalisierung von CT-Bildern")
     parser.add_argument("--input_dir", required=True, help="Pfad zu den Eingabedaten")
     parser.add_argument("--output_dir", required=True, help="Pfad zum Speichern der Ausgabedaten")
-    parser.add_argument("--target_spacing", nargs=3, type=float, default=(1.0, 1.0, 1.0), help="Zielauflösung in mm")
+    parser.add_argument("--target_spacing", nargs=3, type=float, default=(3.0, 3.0, 3.0), help="Zielauflösung in mm")
     parser.add_argument("--interpolation", default="trilinear", help="Interpolationsmethode")
     parser.add_argument("--visualize", action="store_true", help="Visualisierung der Ergebnisse")
     parser.add_argument("--batch_size", type=int, default=4, help="Batch-Größe für die Verarbeitung")
@@ -208,3 +208,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# python preprocessing\resampling_normalization.py --input_dir "D:\thesis_robert\subset_v3\NLST_subset_v3_nifti_unverarbeitet" --output_dir "D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel"

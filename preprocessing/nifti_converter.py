@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 # Pfade
 json_path = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V2\nlst_subset_v2.json"
-output_dir = r"D:\thesis_robert\NLST_subset_v2_nifti"
+output_dir = r"D:\thesis_robert\subset_v2\NLST_subset_v2_nifti_unverarbeitet"
 
 # Zielverzeichnis erstellen, falls es nicht existiert
 os.makedirs(output_dir, exist_ok=True)
