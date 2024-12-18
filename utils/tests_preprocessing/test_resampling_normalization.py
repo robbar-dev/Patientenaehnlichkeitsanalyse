@@ -131,7 +131,7 @@ def analyze_images(input_dir, output_dir, sample_size):
 def main():
     input_dir = r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel"
     output_dir = r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel\validation_resampling_normalization"
-    sample_size = 100  # Stichprobengröße
+    sample_size = 1178  # Stichprobengröße
 
     analyze_images(input_dir, output_dir, sample_size)
 

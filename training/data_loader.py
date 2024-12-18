@@ -172,8 +172,6 @@ if __name__ == "__main__":
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    # Unter Windows: Keine Lambdas, Funktionen im globalen Scope, um Pickling-Probleme zu vermeiden.
-    # Falls immer noch Probleme auftreten, setze num_workers=0 zum Testen.
     loader = DataLoader(
         dataset,
         batch_size=2,

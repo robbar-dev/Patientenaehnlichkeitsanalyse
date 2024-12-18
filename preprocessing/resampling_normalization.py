@@ -53,7 +53,7 @@ def resample_and_normalize(
         LoadImaged(keys=["image"]),
         EnsureChannelFirstd(keys=["image"]),
         Orientationd(keys=["image"], axcodes="LPS"),
-        Rotate90d(keys=["image"], k=3, spatial_axes=(0, 1)),  # Tisch unter den Patienten
+        Rotate90d(keys=["image"], k=2, spatial_axes=(0, 1)),  # Tisch unter den Patienten
         Spacingd(keys=["image"], pixdim=target_spacing, mode=interpolation),
         ScaleIntensityRanged(
             keys=["image"],
@@ -210,3 +210,4 @@ if __name__ == "__main__":
     main()
 
 # python preprocessing\resampling_normalization.py --input_dir "D:\thesis_robert\subset_v3\NLST_subset_v3_nifti_unverarbeitet" --output_dir "D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel"
+

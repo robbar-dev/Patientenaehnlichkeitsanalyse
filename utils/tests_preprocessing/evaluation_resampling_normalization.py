@@ -24,6 +24,15 @@ numeric_columns = [
 for col in numeric_columns:
     image_stats[col] = pd.to_numeric(image_stats[col], errors='coerce')
 
+# Funktion zur Erkennung von Ausreißern basierend auf IQR
+def detect_outliers(column):
+    Q1 = column.quantile(0.25)
+    Q3 = column.quantile(0.75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    return column[(column < lower_bound) | (column > upper_bound)]
+
 # Statistische Kennzahlen berechnen
 intensity_stats = image_stats[['Mean_Intensity', 'Median_Intensity', 'Std_Intensity']].describe()
 voxel_size_stats = image_stats[['Voxel_Size_X', 'Voxel_Size_Y', 'Voxel_Size_Z']].describe()
@@ -42,7 +51,37 @@ print(image_shape_stats)
 print("\nPhysische Größe Statistik:")
 print(physical_size_stats)
 
-# Verteilungen visualisieren
+# Liste für Ausreißer und ihre Dateinamen
+outlier_info = []
+
+# Boxplot erstellen und Ausreißer erkennen
+for column in ['Mean_Intensity', 'Median_Intensity', 'Std_Intensity']:
+    outliers = detect_outliers(image_stats[column])
+    if not outliers.empty:
+        outlier_files = image_stats.loc[outliers.index, 'Image']
+        for file in outlier_files:
+            outlier_info.append(f"{column}: {file} (Wert: {image_stats.loc[outliers.index, column].values})")
+
+    # Boxplot erstellen
+    plt.figure(figsize=(6, 4))
+    sns.boxplot(data=image_stats[[column]])
+    plt.title(f'Boxplot der {column}')
+    plt.ylabel('Wert')
+    plt.show()
+
+# Speichern der Ausreißer in einer Textdatei
+if outlier_info:
+    output_file = r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel\validation_resampling_normalization\outliers_summary.txt"
+    with open(output_file, 'w') as f:
+        f.write("Liste der Ausreißer:\n")
+        for info in outlier_info:
+            f.write(info + "\n")
+    print(f"Ausreißer-Informationen gespeichert in {output_file}")
+else:
+    print("Keine Ausreißer gefunden.")
+
+"""
+# Weitere Visualisierungen
 # 1. Histogramm der Mean_Intensity
 sns.histplot(image_stats['Mean_Intensity'].dropna(), kde=True)
 plt.title('Verteilung der mittleren Intensitätswerte')
@@ -64,21 +103,16 @@ plt.xlabel('Bilddimension X (Voxel)')
 plt.ylabel('Anzahl')
 plt.show()
 
+
 # 4. Histogramm der Physical_Size_X
 sns.histplot(image_stats['Physical_Size_X'].dropna(), kde=True)
 plt.title('Verteilung der physischen Größe X')
 plt.xlabel('Physische Größe X (mm)')
 plt.ylabel('Anzahl')
 plt.show()
+"""
 
-# 5. Boxplot der Intensitätswerte
-plt.figure(figsize=(10, 6))
-sns.boxplot(data=image_stats[['Mean_Intensity', 'Median_Intensity', 'Std_Intensity']])
-plt.title('Boxplot der Intensitätsstatistiken')
-plt.ylabel('Wert')
-plt.show()
-
-# 6. Scatterplot: Bilddimensionen vs. Physische Größe
+# 5. Scatterplot: Bilddimensionen vs. Physische Größe
 plt.figure(figsize=(10, 6))
 plt.scatter(image_stats['Image_Shape_X'], image_stats['Physical_Size_X'], alpha=0.7)
 plt.title('Bilddimensionen X vs. Physische Größe X')
