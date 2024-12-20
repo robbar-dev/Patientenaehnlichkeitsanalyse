@@ -2,6 +2,8 @@ import os
 import sys
 import torch
 import matplotlib.pyplot as plt
+import pandas as pd
+import random
 from torch.utils.data import DataLoader
 
 # Füge das Hauptprojektverzeichnis zum Suchpfad hinzu
@@ -89,22 +91,39 @@ def test_training_loop(loader, device):
         break
 
 if __name__ == "__main__":
-    data_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V3\nlst_subset_v3.csv"
-    data_root = r"D:\thesis_robert\NLST_subset_v3_nifti_resampled_normalized"
-
+    data_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V4\nlst_subset_v4.csv"
+    data_root = r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel"
+    
+    # Lade die CSV-Datei in einen DataFrame
+    df = pd.read_csv(data_csv)
+    
+    # Anzahl der zufällig auszuwählenden Patienten
+    num_random_patients = 10
+    
+    # Wähle zufällige Patienten aus
+    random_pids = random.sample(list(df['pid']), num_random_patients)
+    print(f"Zufällig ausgewählte Patient IDs: {random_pids}")
+    
+    # Filtere den DataFrame basierend auf den ausgewählten PIDs
+    filtered_df = df[df['pid'].isin(random_pids)]
+    
+    # Speichere den gefilterten DataFrame in einer temporären CSV-Datei
+    filtered_csv = "filtered_data.csv"
+    filtered_df.to_csv(filtered_csv, index=False)
+    
+    # Initialisiere das Dataset mit der gefilterten CSV
     dataset = LungCTIterableDataset(
-        data_csv=data_csv,
+        data_csv=filtered_csv,
         data_root=data_root,
-        roi_size=(64,64,3),
-        overlap=(32,32,1),
-        num_samples_per_patch=2
+        roi_size=(96,96,3),
+        overlap=(10,10,1),
     )
-
+    
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     loader = DataLoader(
         dataset,
-        batch_size=20,
+        batch_size=10,
         shuffle=False,  # Shuffle entfernt, da nicht erlaubt mit IterableDataset
         num_workers=4,
         pin_memory=True,

@@ -3,8 +3,8 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader, IterableDataset
 from monai.transforms import (
-    LoadImaged, EnsureChannelFirstd, Lambdad, Compose,
-    RandSpatialCropSamplesd
+    LoadImaged, EnsureChannelFirstd, Lambdad, Compose
+    #RandSpatialCropSamplesd  # auskommentiert, da derzeit nicht genutzt
 )
 import numpy as np
 
@@ -19,26 +19,25 @@ class LungCTIterableDataset(IterableDataset):
     - aus einer CSV (pid, study_yr, combination, ...)
     - für jeden Patienten:
       1) Das Volume lädt (NIfTI)
-      2) 3D-Patches mit Overlap via grid_split erzeugt
-      3) Aus jedem Patch weitere zufällige Sub-Patches via RandSpatialCropSamplesd extrahiert
-      4) Jeden finalen Patch in (3,H,W)-Format bringt (kein Lambda, sondern Funktionsaufruf)
+      2) 3D-Patches mit Overlap via grid_split erzeugt (mit Padding am Rand)
+      3) Wenn gewünscht, könnte RandSpatialCropSamplesd eingesetzt werden (aktuell auskommentiert)
+      4) Jeden finalen Patch in (3,H,W)-Format bringt
       5) Labels, pid, study_yr beibehält
       6) Jeden Patch yieldet
     """
     def __init__(self,
                  data_csv,
                  data_root,
-                 roi_size=(64,64,3),
-                 overlap=(32,32,1),
-                 num_samples_per_patch=2):
+                 roi_size=(96,96,3),
+                 overlap=(10,10,1),
+                 #num_samples_per_patch=2  # aktuell nicht genutzt
+                 ):
         super().__init__()
         self.data_csv = data_csv
         self.data_root = data_root
         self.roi_size = roi_size
         self.overlap = overlap
-        self.num_samples_per_patch = num_samples_per_patch
 
-        # CSV laden
         self.df = pd.read_csv(self.data_csv)
 
         # Basis-Transform für ganzes Volume
@@ -47,16 +46,15 @@ class LungCTIterableDataset(IterableDataset):
             EnsureChannelFirstd(keys=["image"])  # (H,W,D) -> (1,H,W,D)
         ])
 
-        # RandSpatialCropSamplesd erzeugt aus einem einzelnen Patch weitere zufällige Sub-Patches
-        self.rand_crop = RandSpatialCropSamplesd(
-            keys=["image"],
-            roi_size=self.roi_size,
-            num_samples=self.num_samples_per_patch,
-            random_center=True,
-            random_size=False
-        )
+        # RandSpatialCropSamplesd auskommentiert, um Patch-Anzahl gering zu halten
+        # self.rand_crop = RandSpatialCropSamplesd(
+        #     keys=["image"],
+        #     roi_size=self.roi_size,
+        #     num_samples=self.num_samples_per_patch,
+        #     random_center=True,
+        #     random_size=False
+        # )
 
-        # Lambdad mit global definierter Funktion anstelle einer Lambda-Funktion
         self.rearrange_transform = Lambdad(
             keys=["image"],
             func=rearrange_channels
@@ -64,31 +62,57 @@ class LungCTIterableDataset(IterableDataset):
 
     def grid_split(self, volume, roi_size, overlap):
         """
-        Zerlege ein 3D-Volumen in Patches mit Überschneidung.
+        Zerlege ein 3D-Volumen in Patches unter Berücksichtigung von Overlap und
+        füge bei Bedarf am Rand zusätzliche Patches mit Padding hinzu, um das gesamte
+        Volumen abzudecken.
 
         Args:
-            volume (torch.Tensor): Das Eingabevolumen der Form (H,W,D) oder (C,H,W,D).
-                                   Hier erwarten wir (H,W,D) oder (C=1,H,W,D).
-            roi_size (tuple): Die Patchgröße (H, W, D).
-            overlap (tuple): Überschneidungen in jeder Dimension (H, W, D).
+            volume (torch.Tensor): Eingabevolumen (1,H,W,D).
+            roi_size (tuple): Patchgröße (H,W,D).
+            overlap (tuple): Overlap in jeder Dimension (H,W,D).
 
         Returns:
-            List[torch.Tensor]: Liste von 3D-Patches mit Form (1,H,W,D).
+            List[torch.Tensor]: Liste von gepaddeten 3D-Patches (1,H,W,D).
         """
-        # Stelle sicher, dass C vorhanden ist
-        # Nach EnsureChannelFirstd sollte volume (1,H,W,D) sein.
-        # Falls volume ohne Kanal ist, füge einen hinzu.
         if volume.ndim == 3:
             volume = volume.unsqueeze(0)  # (1,H,W,D)
         C, H, W, D = volume.shape
 
-        patch_list = []
         stride = [roi_size[i] - overlap[i] for i in range(3)]
 
-        for z in range(0, D - roi_size[2] + 1, stride[2]):
-            for y in range(0, H - roi_size[0] + 1, stride[0]):
-                for x in range(0, W - roi_size[1] + 1, stride[1]):
+        def get_positions(size, patch_size, step):
+            positions = list(range(0, size - patch_size + 1, step))
+            # Prüfe, ob noch ein Rest übrig bleibt, der kein ganzes Patch füllt
+            if positions and (positions[-1] + patch_size < size):
+                positions.append(size - patch_size)
+            elif not positions:
+                # Falls gar kein Patch passt, trotzdem ein Patch am Anfang ansetzen
+                positions = [0]
+            return positions
+
+        ys = get_positions(H, roi_size[0], stride[0])
+        xs = get_positions(W, roi_size[1], stride[1])
+        zs = get_positions(D, roi_size[2], stride[2])
+
+        patch_list = []
+        for z in zs:
+            for y in ys:
+                for x in xs:
                     patch = volume[:, y:y+roi_size[0], x:x+roi_size[1], z:z+roi_size[2]]
+                    # Prüfe, ob Patch kleiner als roi_size ist:
+                    pad_h = roi_size[0] - patch.shape[1]
+                    pad_w = roi_size[1] - patch.shape[2]
+                    pad_d = roi_size[2] - patch.shape[3]
+
+                    if pad_h > 0 or pad_w > 0 or pad_d > 0:
+                        # Padding in Reihenfolge: (D_before,D_after,W_before,W_after,H_before,H_after)
+                        # Wir müssen allerdings am Ende padden, also alle "afters" nutzen.
+                        patch = torch.nn.functional.pad(
+                            patch,
+                            (0, pad_d, 0, pad_w, 0, pad_h),  # Reihenfolge: (D,W,H)
+                            mode='constant', value=0
+                        )
+
                     patch_list.append(patch)
 
         return patch_list
@@ -108,7 +132,6 @@ class LungCTIterableDataset(IterableDataset):
             if not os.path.exists(patient_file):
                 continue
 
-            # Lade komplettes Volume
             data_dict = {
                 "image": patient_file,
                 "label": label_vec,
@@ -119,10 +142,8 @@ class LungCTIterableDataset(IterableDataset):
             loaded = self.base_transforms(data_dict)  # { 'image': Tensor(1,H,W,D), ... }
             volume = loaded["image"]  # (1,H,W,D)
 
-            # Wende grid_split an
             patch_list = self.grid_split(volume, self.roi_size, self.overlap)
 
-            # Verarbeite die Patches weiter
             for patch in patch_list:
                 patch_dict = {
                     "image": patch,
@@ -131,17 +152,15 @@ class LungCTIterableDataset(IterableDataset):
                     "study_yr": study_yr
                 }
 
-                # RandSpatialCropSamplesd: erzeugt num_samples_per_patch Patches
-                subpatch_list = self.rand_crop(patch_dict)  # Liste von Dicts
+                # Ohne RandSpatialCropSamplesd direkt rearrange_transform anwenden
+                patch_dict = self.rearrange_transform(patch_dict)
 
-                for subpatch_dict in subpatch_list:
-                    subpatch_dict = self.rearrange_transform(subpatch_dict)
-                    yield {
-                        "image": subpatch_dict["image"],
-                        "label": subpatch_dict["label"],
-                        "pid": subpatch_dict["pid"],
-                        "study_yr": subpatch_dict["study_yr"]
-                    }
+                yield {
+                    "image": patch_dict["image"],
+                    "label": patch_dict["label"],
+                    "pid": patch_dict["pid"],
+                    "study_yr": patch_dict["study_yr"]
+                }
 
 def collate_fn(batch):
     images = []
@@ -149,12 +168,12 @@ def collate_fn(batch):
     pids = []
     study_yrs = []
     for b in batch:
-        images.append(b['image'])  # (3,64,64) Tensor
+        images.append(b['image'])  # (3,H,W) Tensor
         labels.append(torch.tensor(b['label'], dtype=torch.float32))
         pids.append(b['pid'])
         study_yrs.append(b['study_yr'])
 
-    images = torch.stack(images, dim=0)   # (B,3,64,64)
+    images = torch.stack(images, dim=0)   # (B,3,H,W)
     labels = torch.stack(labels, dim=0)   # (B,3)
     return images, labels, pids, study_yrs
 
@@ -165,9 +184,8 @@ if __name__ == "__main__":
     dataset = LungCTIterableDataset(
         data_csv=data_csv,
         data_root=data_root,
-        roi_size=(64,64,3),
-        overlap=(32,32,1),
-        num_samples_per_patch=2
+        roi_size=(96,96,3),
+        overlap=(10,10,1)
     )
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -175,7 +193,7 @@ if __name__ == "__main__":
     loader = DataLoader(
         dataset,
         batch_size=2,
-        shuffle=False,  
+        shuffle=False,
         num_workers=4,
         pin_memory=True,
         collate_fn=collate_fn
@@ -184,7 +202,7 @@ if __name__ == "__main__":
     for imgs, labels, pids, study_yrs in loader:
         imgs = imgs.to(device)
         labels = labels.to(device)
-        print("Images shape:", imgs.shape)   # (B,3,64,64)
+        print("Images shape:", imgs.shape)   # (B,3,96,96)
         print("Labels shape:", labels.shape) # (B,3)
         print("PIDs:", pids)
         print("Study_yrs:", study_yrs)

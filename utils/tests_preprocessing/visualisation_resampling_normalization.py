@@ -58,5 +58,5 @@ def visualize_sample_series(input_folder, total_samples, images_per_window=9):
 
 # Hauptprogramm
 if __name__ == "__main__":
-    input_folder = r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel\validation_resampling_normalization\backup_outlier"
+    input_folder = r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel"
     visualize_sample_series(input_folder, total_samples=90, images_per_window=9)
