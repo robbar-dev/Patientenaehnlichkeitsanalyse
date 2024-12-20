@@ -2,6 +2,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+"""
+
+Erstellt eine kleine Evaluierung des Resamplings-, sowie der Normalisierungsergebnisse. 
+
+Das Skript baut auf den Ergebnissen der test_resampling_noramlization.py Datei auf. 
+
+"""
+
 # Laden der image_statistics.csv Datei mit spezifizierter Kodierung
 image_stats = pd.read_csv(
     r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel\validation_resampling_normalization\image_statistics.csv",

@@ -3,6 +3,13 @@ import gzip
 import argparse
 import logging
 
+"""
+
+Erstellt eine Liste von Serien, die nicht geladen werden können und folgich das resampling_normalization.py Skirpt abstürzen lassen. 
+
+Dieses Skript ist notwendig, da das resampling_normalization.py Skript die Serien in Batches lädt und eine einfache Try-Except Implementierung nicht möglich ist. 
+
+"""
 def test_gzip_integrity(input_dir, output_file):
     # Logging einrichten
     logging.basicConfig(

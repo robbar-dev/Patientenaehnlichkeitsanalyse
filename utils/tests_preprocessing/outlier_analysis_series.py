@@ -38,7 +38,7 @@ def visualize_with_slider(file_path):
     plt.show()
 
 if __name__ == "__main__":
-    input_folder = r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel\validation_resampling_normalization\outlier"
+    input_folder = r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_backup_outlier"
     
     # Liste aller NIfTI-Dateien im Ordner
     nifti_files = [os.path.join(input_folder, f) for f in os.listdir(input_folder) 
