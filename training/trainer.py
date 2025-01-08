@@ -193,4 +193,4 @@ if __name__=="__main__":
         pretrained=False
     )
 
-    trainer.train_loop(num_epochs=2, num_triplets=10)
+    trainer.train_loop(num_epochs=2, num_triplets=100)
