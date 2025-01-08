@@ -19,9 +19,9 @@ class TripletSampler:
     """
     Erzeugt Triplets (Anchor, Positive, Negative) auf Patientenebene.
     - Anchor, Positive => gleiche Labelkombination
-    - Negative => aus den top_k unähnlichsten Kombis
-    - Kein Triplet (A_pid, P_pid, N_pid) doppelt
-    - Patient-Reuse ist erlaubt => Ein PID kann mehrmals pro Epoche auftreten
+    - Negative => aus den top_k unähnlichsten Kombis (random)
+    - Kein Triplet (A_pid, P_pid, N_pid) doppelt pro Epoche
+    - Patienten-Reuse ist erlaubt
     """
     def __init__(
         self,
@@ -34,7 +34,7 @@ class TripletSampler:
         Args:
           df: Pandas DataFrame mit Spalten [pid, study_yr, combination]
           num_triplets: wie viele Triplets pro Epoche
-          shuffle: ob gemischt
+          shuffle: ob gemischt werden soll
           top_k_negatives: aus den top_k unähnlichsten combos picken wir random
         """
         self.df = df.copy()
