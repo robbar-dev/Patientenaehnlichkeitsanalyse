@@ -6,35 +6,42 @@ class BaseCNN(nn.Module):
     def __init__(self, model_name='resnet18', pretrained=True):
         super(BaseCNN, self).__init__()
         
-        # Lade ein vortrainiertes Model
-        # Variationen: resnet18, resnet50, densenet121 usw.
         if model_name == 'resnet18':
-            self.model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
-            # Entfernen der letzten voll verbundene Schicht
-            # Original: self.model.fc = nn.Linear(512, 1000) bei ResNet-18
-            # FC muss entfernt werden und statt dessen nur Features bis zum global average pooling behalten
-            self.model = nn.Sequential(*list(self.model.children())[:-1])  
-            # Die resultierende Ausgabe sollte nun [Batch, 512, 1, 1] sein
-            # Durch Squeeze -> [Batch, 512]
+            # Lade ein vortrainiertes ResNet18 (ImageNet) aus TorchVision
+            # ACHTUNG: Vortrainiert auf 224x224 RGB
+            # -> Du kannst pretrained=False setzen, um nicht auf ImageNet-Weights zurückzugreifen
+            if pretrained:
+                self.model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+            else:
+                self.model = models.resnet18(weights=None)
             
-            self.output_dim = 512  # Dimension des Feature-Vektors
-            
+            # Entferne den letzten FC-Layer
+            # Original: self.model.fc = nn.Linear(512, 1000) für ResNet18
+            # Wir wollen nur bis zum global average pooling
+            # In PyTorch: list(self.model.children()) = [Conv1, BN1, ReLU, MaxPool, ..., layer4, avgpool, fc]
+            # Wir nehmen alles außer fc:
+            self.model = nn.Sequential(*list(self.model.children())[:-1])
+
+            # Die resultierende Ausgabe sollte nun die Form (B, 512, 1, 1) haben
+            # Wir flatten das später im forward()
+            self.output_dim = 512
+        
         else:
             raise ValueError(f"Model {model_name} not supported yet.")
 
     def forward(self, x):
         """
-        x: Tensor mit Form (B, C=3, H, W)
+        x: Tensor der Form (B, 3, H, W)
+        Returns: (B, 512) Feature Embeddings
         """
-        features = self.model(x)  # (B, 512, 1, 1) bei ResNet-18
-        features = features.squeeze()  # (B, 512)
+        features = self.model(x)  # -> (B, 512, 1, 1) bei ResNet18
+        features = features.squeeze(-1).squeeze(-1)  # -> (B, 512)
         return features
 
+
 if __name__ == "__main__":
-    # Test mit Dummy-Daten:
-    # Erstellen eines Dummy-Patchs der Größe (Batch=2, Channels=3, Height=224, Width=224)
-    # Height und Width kann später an Patch-Größen anpasst werden
-    dummy_input = torch.randn(2, 3, 224, 224)
+    # Kleiner Test
+    dummy_input = torch.randn(2, 3, 96, 96)  # Anstatt 224x224 (typische ResNet-Input), hier 96x96
     model = BaseCNN(model_name='resnet18', pretrained=False)
     out = model(dummy_input)
-    print("Output shape:", out.shape)  # sollte (2, 512) sein
+    print("Output shape:", out.shape)  # (2, 512)

@@ -1,140 +1,201 @@
+# trainer.py
+
 import os
 import sys
+import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import pandas as pd
+
 from torch.utils.data import DataLoader
 
-# Füge das Hauptprojektverzeichnis zum Suchpfad hinzu (sofern nötig)
+# Füge Dein Projektverzeichnis hinzu (falls nötig)
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# 1) Importiere Deinen DataLoader & Dataset
-from training.data_loader import LungCTIterableDataset, collate_fn
-
-# 2) Importiere Deinen ResNet18-Feature-Extraktor
+# BaseCNN: ResNet18-Backbone, das (B,3,H,W)->(B,512) ausgibt
 from model.base_cnn import BaseCNN
+# MIL Aggregator: simplest (Mean) aggregator
+class MILAggregator(nn.Module):
+    def forward(self, patch_embs):
+        # patch_embs: (N_patches, 512)
+        # Return (1, 512)
+        return patch_embs.mean(dim=0, keepdim=True)
 
-###############################################################################
-# 1) Ein sehr einfaches Aggregationsmodul (Mean Pooling über Batch)
-###############################################################################
-class SimpleBatchAggregator(nn.Module):
-    """
-    Für Sprint A: wir mitteln die Embeddings aller Patches im Batch
-    Einfacher Ersatz für richtige MIL-Logik (die wäre patientenweise).
-    """
-    def forward(self, patch_embeddings):
-        # patch_embeddings: (B, 512) bei ResNet18
-        patient_emb = patch_embeddings.mean(dim=0, keepdim=True)  # => (1, 512)
-        return patient_emb
+# TripletSampler
+from training.triplet_sampler import TripletSampler
+# SinglePatientDataset
+from training.single_patient_dataset import SinglePatientDataset
 
-###############################################################################
-# 2) Beispielhafter Trainer
-###############################################################################
-class Trainer:
-    def __init__(self,
-                 data_csv,
-                 data_root,
-                 batch_size=3,
-                 lr=1e-3,
-                 device="cuda",
-                 pretrained=False):
+class TripletTrainer:
+    def __init__(self, df, data_root, device='cuda', lr=1e-3, margin=1.0,
+                 roi_size=(96,96,3), overlap=(10,10,1), pretrained=False):
         """
         Args:
-          data_csv: CSV-Datei mit den Patienten (für Sprint A: Minidatensatz)
-          data_root: Pfad zu den .nii.gz-Dateien
-          batch_size: Anzahl Patches pro Batch
-          lr: Lernrate
-          device: 'cuda' oder 'cpu'
-          pretrained: Ob das ResNet18 ImageNet-Gewichte lädt
+            df: Pandas DataFrame [pid, study_yr, combination]
+            data_root: Pfad zu NIfTI-Daten
+            device: 'cuda' oder 'cpu'
+            lr: Lernrate
+            margin: Triplet-Loss margin
+            roi_size, overlap: Parameter für Patch-Extraktion
+            pretrained: ob ResNet18 auf ImageNet-Gewichten basiert
         """
+        self.df = df
+        self.data_root = data_root
         self.device = device
-        
-        # (1) Model: ResNet18 als Feature-Extraktor => 512-dim Output
+        self.roi_size = roi_size
+        self.overlap = overlap
+
+        # CNN: ResNet18 => (B, 512)
         self.base_cnn = BaseCNN(model_name='resnet18', pretrained=pretrained).to(device)
+        # Aggregator => Mean-Pooling
+        self.mil_agg = MILAggregator().to(device)
+
+        # Triplet-Loss
+        self.triplet_loss_fn = nn.TripletMarginLoss(margin=margin, p=2)
         
-        # (2) Aggregator: Mittelwert über alle Patches im Batch
-        self.aggregator = SimpleBatchAggregator().to(device)
-        
-        # (3) Optimizer
+        # Optimizer
         self.optimizer = optim.Adam(
-            list(self.base_cnn.parameters()) + list(self.aggregator.parameters()),
+            list(self.base_cnn.parameters()) + list(self.mil_agg.parameters()),
             lr=lr
         )
 
-        # (4) Dummy-Loss: MSE mit 0-Vektor (512-dim)
-        self.criterion = nn.MSELoss()
-
-        # (5) Dataset & DataLoader
-        dataset = LungCTIterableDataset(
-            data_csv=data_csv,
-            data_root=data_root,
-            roi_size=(96,96,3),
-            overlap=(10,10,1)
+    def compute_patient_embedding(self, pid, study_yr):
+        """
+        Lädt alle Patches dieses Patienten -> CNN -> MIL -> (1,512)
+        """
+        # SinglePatientDataset
+        ds = SinglePatientDataset(
+            data_root=self.data_root,
+            pid=pid,
+            study_yr=study_yr,
+            roi_size=self.roi_size,
+            overlap=self.overlap
         )
+        loader = DataLoader(ds, batch_size=16, shuffle=False)
+
+        patch_embs = []
+        self.base_cnn.eval()    # oder train(), je nachdem
+        self.mil_agg.eval()
         
-        self.loader = DataLoader(
-            dataset,
-            batch_size=batch_size,
-            shuffle=False,  
-            num_workers=0,  # Debug
-            pin_memory=True,
-            collate_fn=collate_fn
-        )
+        # Du KANNST in train-Phase BN/Dropout wollen; hier ggf. .train().
+        # Dann solltest Du .grad() beibehalten. => Trick: Wir machen embeddings im train-mode
+        # aber das kann sehr VRAM-intensiv werden. => Hier Minimallösung:
+        
+        with torch.no_grad():
+            for patch_t in loader:
+                patch_t = patch_t.to(self.device)    # (B,3,H,W)
+                emb = self.base_cnn(patch_t)         # => (B,512)
+                patch_embs.append(emb)
+        if len(patch_embs)==0:
+            # kein Patch => return zero-embedding
+            return torch.zeros((1,512), device=self.device)
 
-    def train_one_epoch(self):
+        patch_embs = torch.cat(patch_embs, dim=0) # => (N_patches, 512)
+        patient_emb = self.mil_agg(patch_embs)    # => (1,512)
+        return patient_emb
+
+    def train_one_epoch(self, triplet_sampler):
+        """
+        triplet_sampler: Erzeugt (A,P,N)-Triplets => je iteration 1 Triplet -> 1 update
+        """
         self.base_cnn.train()
-        self.aggregator.train()
+        self.mil_agg.train()
         
         total_loss = 0.0
-        for step, (imgs, labels, pids, study_yrs) in enumerate(self.loader):
-            # imgs shape: (B, 3, H=96, W=96)
-            imgs = imgs.to(self.device)
+        for step, (anchor_info, pos_info, neg_info) in enumerate(triplet_sampler):
+            # anchor_info = {pid, study_yr, combination}
+            anchor_pid = anchor_info['pid']
+            anchor_sy  = anchor_info['study_yr']
+
+            pos_pid = pos_info['pid']
+            pos_sy  = pos_info['study_yr']
+
+            neg_pid = neg_info['pid']
+            neg_sy  = neg_info['study_yr']
+
+            # 1) hole embeddings
+            # ACHTUNG: Hier hast Du evtl. sehr viele Patches => 
+            # => Speichere Graph? => in Triplet-Learning hat man oft .no_grad() an,
+            #    aber wir wollen fine-tunen => Also IM PRINZIP "with torch.enable_grad():"
+            #    Minimallösung: unrolled 
             
-            # 1) CNN Forward: => (B, 512)
-            patch_embs = self.base_cnn(imgs)
+            anchor_emb = self._forward_patient(anchor_pid, anchor_sy)
+            pos_emb    = self._forward_patient(pos_pid, pos_sy)
+            neg_emb    = self._forward_patient(neg_pid, neg_sy)
             
-            # 2) Aggregation => (1, 512)
-            patient_emb = self.aggregator(patch_embs)
-            
-            # 3) Dummy-Loss: MSE gegen Null
-            target = torch.zeros_like(patient_emb)
-            loss = self.criterion(patient_emb, target)
-            
+            # 2) TripletLoss => shape (1,) => scalar
+            loss = self.triplet_loss_fn(anchor_emb, pos_emb, neg_emb)
+
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
             
             total_loss += loss.item()
-            if step % 10 == 0:
-                print(f"[Step {step}] Loss = {loss.item():.4f}")
+            if step%10==0:
+                print(f"[Step {step}] Triplet Loss = {loss.item():.4f}")
+        
+        avg_loss = total_loss / (step+1)
+        print(f"Epoch Loss = {avg_loss:.4f}")
 
-        avg_loss = total_loss / (step + 1)
-        print(f"Epoch loss = {avg_loss:.4f}")
+    def _forward_patient(self, pid, study_yr):
+        """
+        Hilfsfunktion: Holt die Patches => forward => returns embedding mit grad
+        """
+        ds = SinglePatientDataset(
+            data_root=self.data_root,
+            pid=pid,
+            study_yr=study_yr,
+            roi_size=self.roi_size,
+            overlap=self.overlap
+        )
+        loader = DataLoader(ds, batch_size=16, shuffle=False)
+        
+        patch_embs = []
+        for patch_t in loader:
+            patch_t = patch_t.to(self.device)   # => (B,3,H,W)
+            emb = self.base_cnn(patch_t)        # => (B,512)
+            patch_embs.append(emb)
 
-    def train_loop(self, num_epochs=1):
+        if len(patch_embs)==0:
+            # kein Patch
+            return torch.zeros((1,512), device=self.device, requires_grad=True)
+
+        patch_embs = torch.cat(patch_embs, dim=0) # => (N_patches,512)
+        patient_emb = self.mil_agg(patch_embs)     # => (1,512)
+        return patient_emb
+
+    def train_loop(self, num_epochs=2, num_triplets=100):
+        # Baue TripletSampler
+        from training.triplet_sampler import TripletSampler
+        sampler = TripletSampler(self.df, num_triplets=num_triplets, shuffle=True)
+
         for epoch in range(num_epochs):
             print(f"=== EPOCH {epoch+1}/{num_epochs} ===")
-            self.train_one_epoch()
+            self.train_one_epoch(sampler)
 
 ###############################################################################
-# 3) Main
+# Minimal test main
 ###############################################################################
-if __name__ == "__main__":
-    # Pfade anpassen: Du kannst Dir einen kleinen Satz (z.B. 12 Patienten) anlegen.
-    data_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\nlst_subset_v5.csv"
-    data_root = r"D:\thesis_robert\NLST_subset_v5_nifti_3mm_Voxel"
-
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+if __name__=="__main__":
+    import pandas as pd
     
-    trainer = Trainer(
-        data_csv=data_csv,
+    # Angenommen, Du hast eine CSV -> df, die [pid, study_yr, combination] enthält
+    # data_root = Pfad zu NIfTI-Dateien
+    data_csv = r"PATH\TO\CSV.csv"
+    data_root = r"PATH\TO\NIFTI"
+    
+    df = pd.read_csv(data_csv)
+    trainer = TripletTrainer(
+        df=df,
         data_root=data_root,
-        batch_size=3,
-        lr=1e-3,
-        device=device,
+        device='cuda',
+        lr=1e-4,
+        margin=1.0,
+        roi_size=(96,96,3),
+        overlap=(10,10,1),
         pretrained=False
     )
-
-    trainer.train_loop(num_epochs=2)
+    trainer.train_loop(num_epochs=2, num_triplets=10)
