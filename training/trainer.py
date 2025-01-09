@@ -8,40 +8,37 @@ import pandas as pd
 
 from torch.utils.data import DataLoader
 
-# Füge Dein Projektverzeichnis hinzu (falls nötig)
+# 1) Projektpfad
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-    
-# 1) ResNet18-Feature Extractor
+
+# 2) ResNet18-Feature Extractor
 from model.base_cnn import BaseCNN
 
-# 2) MIL Aggregator: simplest (Mean)
-class MILAggregator(nn.Module):
-    def forward(self, patch_embs):
-        # patch_embs: (N_patches, 512)
-        # => (1, 512)
-        return patch_embs.mean(dim=0, keepdim=True)
+# 3) Importiere Deinen AttentionMILAggregator
+from model.mil_aggregator import AttentionMILAggregator
 
-# 3) TripletSampler
+# 4) TripletSampler
 from training.triplet_sampler import TripletSampler
 
-# 4) SinglePatientDataset
+# 5) SinglePatientDataset
 from training.data_loader import SinglePatientDataset
-
 
 class TripletTrainer:
     def __init__(self, df, data_root, device='cuda', lr=1e-3, margin=1.0,
-                 roi_size=(96,96,3), overlap=(10,10,1), pretrained=False):
+                 roi_size=(96,96,3), overlap=(10,10,1), pretrained=False,
+                 attention_hidden_dim=128):
         """
         Args:
             df: Pandas DataFrame mit Spalten [pid, study_yr, combination]
             data_root: Pfad zu den .nii.gz NIfTI-Daten
             device: 'cuda' oder 'cpu'
             lr: Lernrate
-            margin: Triplet-Margin
+            margin: Triplet-Loss margin
             roi_size, overlap: Patch-Extraktions-Parameter
             pretrained: ob ResNet18 auf ImageNet-Weights basiert
+            attention_hidden_dim: Größe der Hidden-Layer im Attention-MLP
         """
         self.df = df
         self.data_root = data_root
@@ -51,11 +48,15 @@ class TripletTrainer:
 
         # (A) CNN-Backbone
         self.base_cnn = BaseCNN(model_name='resnet18', pretrained=pretrained).to(device)
-        # (B) MIL aggregator (mean pooling)
-        self.mil_agg = MILAggregator().to(device)
+
+        # (B) Attention-MIL Aggregator
+        #    Falls Du die Dimension 512 in base_cnn hast, setze in_dim=512
+        self.mil_agg = AttentionMILAggregator(in_dim=512, hidden_dim=128, dropout=0.2).to(device)
+
         # (C) TripletLoss
         self.triplet_loss_fn = nn.TripletMarginLoss(margin=margin, p=2)
-        # (D) Optimizer
+
+        # (D) Optimizer (inkl. Aggregator-Params)
         self.optimizer = optim.Adam(
             list(self.base_cnn.parameters()) + list(self.mil_agg.parameters()),
             lr=lr
@@ -63,8 +64,8 @@ class TripletTrainer:
 
     def compute_patient_embedding(self, pid, study_yr):
         """
-        Lädt ALLE Patches für (pid, study_yr) => CNN => MIL => 1 Embedding (1,512)
-        (keine Grad, hier nur Inferenz)
+        Lädt ALLE Patches für (pid, study_yr) => CNN => (N_patches,512) => AttentionMIL => (1,512).
+        (keine Grad, reine Inferenz)
         """
         ds = SinglePatientDataset(
             data_root=self.data_root,
@@ -76,16 +77,17 @@ class TripletTrainer:
         loader = DataLoader(ds, batch_size=16, shuffle=False)
 
         all_embs = []
-        # Wir machen hier no_grad => reine Feature-Extraktion
         self.base_cnn.eval()
         self.mil_agg.eval()
+
         with torch.no_grad():
             for patch_t in loader:
                 patch_t = patch_t.to(self.device)  # => (B,3,H,W)
                 emb = self.base_cnn(patch_t)       # => (B,512)
                 all_embs.append(emb)
 
-        if len(all_embs)==0:
+        if len(all_embs) == 0:
+            # kein Patch => leeres embedding
             return torch.zeros((1,512), device=self.device)
 
         patch_embs = torch.cat(all_embs, dim=0)  # => (N_patches,512)
@@ -94,8 +96,7 @@ class TripletTrainer:
 
     def _forward_patient(self, pid, study_yr):
         """
-        Alternative, falls mit Grad rechnet (End-to-end). 
-        => SinglePatientDataset + (train-mode) => RBC. 
+        Variante mit Grad => wir trainieren BN/Dropout => (train-mode).
         """
         ds = SinglePatientDataset(
             data_root=self.data_root,
@@ -107,28 +108,26 @@ class TripletTrainer:
         loader = DataLoader(ds, batch_size=16, shuffle=False)
 
         patch_embs = []
-        # In End-to-end Triplet => wir wollen BN/Dropout. => train
         self.base_cnn.train()
         self.mil_agg.train()
-        
+
         for patch_t in loader:
             patch_t = patch_t.to(self.device)
-            emb = self.base_cnn(patch_t)
+            emb = self.base_cnn(patch_t)  # => (B,512)
             patch_embs.append(emb)
 
-        if len(patch_embs)==0:
-            # kreieren wir ein leeres embedding => (1,512)
-            # braucht requires_grad=True, sonst kann PyTorch nicht backprop machen
+        if len(patch_embs) == 0:
+            # kein Patch => leeres embedding
             return torch.zeros((1,512), device=self.device, requires_grad=True)
 
         patch_embs = torch.cat(patch_embs, dim=0)
-        patient_emb = self.mil_agg(patch_embs)
+        patient_emb = self.mil_agg(patch_embs)  # => (1,512)
         return patient_emb
 
     def train_one_epoch(self, sampler):
         """
-        sampler => Iteration über (anchor_info, pos_info, neg_info)
-        In jeder Iteration => 1 Triplet => 1 Optimizer-Schritt
+        sampler => Iteration über (A_info, P_info, N_info).
+        => pro Iteration 1 Triplet => 1 Optimizer-Schritt
         """
         total_loss = 0.0
         steps = 0
@@ -138,13 +137,13 @@ class TripletTrainer:
             pos_pid, pos_sy = pos_info['pid'], pos_info['study_yr']
             neg_pid, neg_sy = neg_info['pid'], neg_info['study_yr']
 
-            # => Embeddings MIT Grad (train)
-            anchor_emb = self._forward_patient(anchor_pid, anchor_sy)  # (1,512)
+            # => Embeddings mit Grad
+            anchor_emb = self._forward_patient(anchor_pid, anchor_sy)
             pos_emb    = self._forward_patient(pos_pid, pos_sy)
             neg_emb    = self._forward_patient(neg_pid, neg_sy)
 
             loss = self.triplet_loss_fn(anchor_emb, pos_emb, neg_emb)
-            
+
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
@@ -155,10 +154,7 @@ class TripletTrainer:
             if step % 50 == 0:
                 print(f"[Step {step}] Triplet Loss = {loss.item():.4f}")
 
-        if steps>0:
-            avg_loss = total_loss / steps
-        else:
-            avg_loss = 0.0
+        avg_loss = total_loss / steps if steps>0 else 0.0
         print(f"Epoch Loss = {avg_loss:.4f}")
 
     def train_loop(self, num_epochs=2, num_triplets=100):
@@ -174,7 +170,8 @@ class TripletTrainer:
         for epoch in range(num_epochs):
             print(f"=== EPOCH {epoch+1}/{num_epochs} ===")
             self.train_one_epoch(sampler)
-            sampler.reset_epoch() 
+            # optional: sampler.reset_epoch() => in der nächsten Epoche erneut selbst. Triplets
+
 
 if __name__=="__main__":
     data_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\nlst_subset_v5.csv"
@@ -182,15 +179,17 @@ if __name__=="__main__":
 
     df = pd.read_csv(data_csv)
 
+    # Starte das Training
     trainer = TripletTrainer(
         df=df,
         data_root=data_root,
         device='cuda',
-        lr=1e-5,
+        lr=1e-4,
         margin=1.0,
         roi_size=(96,96,3),
         overlap=(10,10,1),
-        pretrained=False
+        pretrained=False,
+        attention_hidden_dim=128
     )
 
-    trainer.train_loop(num_epochs=30, num_triplets=1000)
+    trainer.train_loop(num_epochs=10, num_triplets=1000)
