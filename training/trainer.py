@@ -152,7 +152,7 @@ class TripletTrainer:
             total_loss += loss.item()
             steps += 1
 
-            if step % 10 == 0:
+            if step % 50 == 0:
                 print(f"[Step {step}] Triplet Loss = {loss.item():.4f}")
 
         if steps>0:
@@ -186,11 +186,11 @@ if __name__=="__main__":
         df=df,
         data_root=data_root,
         device='cuda',
-        lr=1e-4,
+        lr=1e-5,
         margin=1.0,
         roi_size=(96,96,3),
         overlap=(10,10,1),
         pretrained=False
     )
 
-    trainer.train_loop(num_epochs=2, num_triplets=100)
+    trainer.train_loop(num_epochs=30, num_triplets=1000)
