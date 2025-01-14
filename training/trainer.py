@@ -16,7 +16,7 @@ if project_root not in sys.path:
 # 2) ResNet18-Feature Extractor
 from model.base_cnn import BaseCNN
 
-# 3) Importiere Deinen AttentionMILAggregator
+# 3) Gated-Attention MIL Aggregator (mit Dropout)
 from model.mil_aggregator import AttentionMILAggregator
 
 # 4) TripletSampler
@@ -25,10 +25,34 @@ from training.triplet_sampler import TripletSampler
 # 5) SinglePatientDataset
 from training.data_loader import SinglePatientDataset
 
-class TripletTrainer:
-    def __init__(self, df, data_root, device='cuda', lr=1e-3, margin=1.0,
-                 roi_size=(96,96,3), overlap=(10,10,1), pretrained=False,
-                 attention_hidden_dim=128):
+import logging
+
+
+class TripletTrainer(nn.Module):
+    """
+    Ein erweiterter Trainer, der nn.Module erbt, um state_dict() und load_state_dict() 
+    nativ verwenden zu können. Enthält:
+    - base_cnn (ResNet18)
+    - mil_agg (Attention-MIL)
+    - triplet_loss
+    - optimizer
+    - optional: scheduler
+    - Methoden: train_loop, train_one_epoch, compute_patient_embedding, etc.
+    - save_checkpoint / load_checkpoint
+    """
+
+    def __init__(self, 
+                 df,
+                 data_root,
+                 device='cuda',
+                 lr=1e-3, 
+                 margin=1.0,
+                 roi_size=(96,96,3),
+                 overlap=(10,10,1),
+                 pretrained=False,
+                 attention_hidden_dim=128,
+                 dropout=0.2,
+                 weight_decay=1e-5):
         """
         Args:
             df: Pandas DataFrame mit Spalten [pid, study_yr, combination]
@@ -39,33 +63,52 @@ class TripletTrainer:
             roi_size, overlap: Patch-Extraktions-Parameter
             pretrained: ob ResNet18 auf ImageNet-Weights basiert
             attention_hidden_dim: Größe der Hidden-Layer im Attention-MLP
+            dropout: Dropout-Rate im Aggregator
+            weight_decay: L2-Reg
         """
+        super().__init__()  # wichtig, damit nn.Module initialisiert
+
         self.df = df
         self.data_root = data_root
         self.device = device
+
         self.roi_size = roi_size
         self.overlap = overlap
 
-        # (A) CNN-Backbone
+        # A) CNN-Backbone
         self.base_cnn = BaseCNN(model_name='resnet18', pretrained=pretrained).to(device)
 
-        # (B) Attention-MIL Aggregator
-        #    Falls Du die Dimension 512 in base_cnn hast, setze in_dim=512
-        self.mil_agg = AttentionMILAggregator(in_dim=512, hidden_dim=128, dropout=0.2).to(device)
+        # B) Attention-MIL Aggregator
+        # => 512 in base_cnn -> in_dim=512
+        self.mil_agg = AttentionMILAggregator(
+            in_dim=512,
+            hidden_dim=attention_hidden_dim,
+            dropout=dropout
+        ).to(device)
 
-        # (C) TripletLoss
+        # C) TripletLoss
         self.triplet_loss_fn = nn.TripletMarginLoss(margin=margin, p=2)
 
-        # (D) Optimizer (inkl. Aggregator-Params)
+        # D) Optimizer
         self.optimizer = optim.Adam(
             list(self.base_cnn.parameters()) + list(self.mil_agg.parameters()),
-            lr=lr
+            lr=lr,
+            weight_decay=weight_decay
         )
 
+        # E) Optional: Scheduler
+        self.scheduler = None  # Kann später von außen gesetzt werden
+
+        # store or print some logs
+        logging.info(f"TripletTrainer init: lr={lr}, margin={margin}, dropout={dropout}, weight_decay={weight_decay}")
+
+    # --------------------------------------------------------------------------
+    # 1) Embedding-Berechnung ohne Grad (Inferenz)
+    # --------------------------------------------------------------------------
     def compute_patient_embedding(self, pid, study_yr):
         """
         Lädt ALLE Patches für (pid, study_yr) => CNN => (N_patches,512) => AttentionMIL => (1,512).
-        (keine Grad, reine Inferenz)
+        Keine Grad-Berechnung.
         """
         ds = SinglePatientDataset(
             data_root=self.data_root,
@@ -74,7 +117,7 @@ class TripletTrainer:
             roi_size=self.roi_size,
             overlap=self.overlap
         )
-        loader = DataLoader(ds, batch_size=16, shuffle=False)
+        loader = DataLoader(ds, batch_size=32, shuffle=False)
 
         all_embs = []
         self.base_cnn.eval()
@@ -87,16 +130,19 @@ class TripletTrainer:
                 all_embs.append(emb)
 
         if len(all_embs) == 0:
-            # kein Patch => leeres embedding
+            # Kein Patch => leeres embedding
             return torch.zeros((1,512), device=self.device)
 
         patch_embs = torch.cat(all_embs, dim=0)  # => (N_patches,512)
         patient_emb = self.mil_agg(patch_embs)   # => (1,512)
         return patient_emb
 
+    # --------------------------------------------------------------------------
+    # 2) Embedding-Berechnung mit Grad (Training)
+    # --------------------------------------------------------------------------
     def _forward_patient(self, pid, study_yr):
         """
-        Variante mit Grad => wir trainieren BN/Dropout => (train-mode).
+        Lädt alle Patches => CNN => Aggregation => (1,512) mit Grad.
         """
         ds = SinglePatientDataset(
             data_root=self.data_root,
@@ -105,7 +151,7 @@ class TripletTrainer:
             roi_size=self.roi_size,
             overlap=self.overlap
         )
-        loader = DataLoader(ds, batch_size=16, shuffle=False)
+        loader = DataLoader(ds, batch_size=32, shuffle=False)
 
         patch_embs = []
         self.base_cnn.train()
@@ -124,10 +170,12 @@ class TripletTrainer:
         patient_emb = self.mil_agg(patch_embs)  # => (1,512)
         return patient_emb
 
+    # --------------------------------------------------------------------------
+    # 3) train_one_epoch: Iteration über Sampler => TripletLoss
+    # --------------------------------------------------------------------------
     def train_one_epoch(self, sampler):
         """
-        sampler => Iteration über (A_info, P_info, N_info).
-        => pro Iteration 1 Triplet => 1 Optimizer-Schritt
+        sampler => Iteration über (Anchor,Pos,Neg). => 1 Triplet => 1 Optimizer-Schritt
         """
         total_loss = 0.0
         steps = 0
@@ -137,7 +185,6 @@ class TripletTrainer:
             pos_pid, pos_sy = pos_info['pid'], pos_info['study_yr']
             neg_pid, neg_sy = neg_info['pid'], neg_info['study_yr']
 
-            # => Embeddings mit Grad
             anchor_emb = self._forward_patient(anchor_pid, anchor_sy)
             pos_emb    = self._forward_patient(pos_pid, pos_sy)
             neg_emb    = self._forward_patient(neg_pid, neg_sy)
@@ -151,15 +198,20 @@ class TripletTrainer:
             total_loss += loss.item()
             steps += 1
 
-            if step % 50 == 0:
-                print(f"[Step {step}] Triplet Loss = {loss.item():.4f}")
+            if step % 250 == 0:
+                logging.info(f"[Step {step}] Triplet Loss = {loss.item():.4f}")
 
         avg_loss = total_loss / steps if steps>0 else 0.0
-        print(f"Epoch Loss = {avg_loss:.4f}")
+        logging.info(f"Epoch Loss = {avg_loss:.4f}")
 
+    # --------------------------------------------------------------------------
+    # 4) train_loop: Baut Sampler, läuft über num_epochs
+    # --------------------------------------------------------------------------
     def train_loop(self, num_epochs=2, num_triplets=100):
         """
-        Baut den TripletSampler und durchläuft num_epochs
+        Baut den TripletSampler und durchläuft num_epochs.
+        Pro Epoche => train_one_epoch => sampler.reset_epoch
+        Optional: scheduler.step() könnte man hier oder nach jeder Epoche aufrufen.
         """
         sampler = TripletSampler(
             df=self.df,
@@ -167,19 +219,68 @@ class TripletTrainer:
             shuffle=True,
             top_k_negatives=3
         )
-        for epoch in range(num_epochs):
-            print(f"=== EPOCH {epoch+1}/{num_epochs} ===")
+        for epoch in range(1, num_epochs+1):
+            logging.info(f"=== EPOCH {epoch}/{num_epochs} ===")
             self.train_one_epoch(sampler)
-            # optional: sampler.reset_epoch() => in der nächsten Epoche erneut selbst. Triplets
+
+            # Wenn du einen Scheduler hast, kannst du hier self.scheduler.step()
+            if self.scheduler is not None:
+                self.scheduler.step()
+                current_lr = self.scheduler.get_last_lr()[0]
+                logging.info(f"Nach Epoche {epoch}, LR={current_lr}")
+
+            sampler.reset_epoch()
+
+    # --------------------------------------------------------------------------
+    # 5) Checkpoint speichern
+    # --------------------------------------------------------------------------
+    def save_checkpoint(self, path):
+        """
+        Speichert base_cnn, mil_agg, optimizer, optional scheduler
+        als state_dict in path.
+        """
+        checkpoint = {
+            'base_cnn': self.base_cnn.state_dict(),
+            'mil_agg': self.mil_agg.state_dict(),
+            'optimizer': self.optimizer.state_dict()
+        }
+        if self.scheduler is not None:
+            checkpoint['scheduler'] = self.scheduler.state_dict()
+
+        torch.save(checkpoint, path)
+        logging.info(f"Checkpoint saved to {path}")
+
+    # --------------------------------------------------------------------------
+    # 6) Checkpoint laden
+    # --------------------------------------------------------------------------
+    def load_checkpoint(self, path):
+        """
+        Lädt base_cnn, mil_agg, optimizer, optional scheduler
+        aus path.
+        """
+        checkpoint = torch.load(path, map_location=self.device)
+
+        self.base_cnn.load_state_dict(checkpoint['base_cnn'])
+        self.mil_agg.load_state_dict(checkpoint['mil_agg'])
+        self.optimizer.load_state_dict(checkpoint['optimizer'])
+        if self.scheduler is not None and 'scheduler' in checkpoint:
+            self.scheduler.load_state_dict(checkpoint['scheduler'])
+
+        logging.info(f"Checkpoint loaded from {path}")
 
 
+# ------------------------------------------------------------------------------
+# Falls du direkt trainer.py aufrufst (z.B. zu Debugging-Zwecken)
+# ------------------------------------------------------------------------------
 if __name__=="__main__":
-    data_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\nlst_subset_v5.csv"
+    import logging
+    logging.basicConfig(level=logging.INFO)
+
+    data_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv"
     data_root = r"D:\thesis_robert\NLST_subset_v5_nifti_3mm_Voxel"
 
     df = pd.read_csv(data_csv)
 
-    # Starte das Training
     trainer = TripletTrainer(
         df=df,
         data_root=data_root,
@@ -189,7 +290,14 @@ if __name__=="__main__":
         roi_size=(96,96,3),
         overlap=(10,10,1),
         pretrained=False,
-        attention_hidden_dim=128
+        attention_hidden_dim=128,
+        dropout=0.2,
+        weight_decay=1e-5
     )
 
-    trainer.train_loop(num_epochs=10, num_triplets=1000)
+    # Debug-Training
+    trainer.train_loop(num_epochs=2, num_triplets=200)
+    # Example: Save
+    trainer.save_checkpoint("debug_checkpoint.pt")
+    # then load back
+    trainer.load_checkpoint("debug_checkpoint.pt")
