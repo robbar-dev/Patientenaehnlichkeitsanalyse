@@ -108,14 +108,14 @@ class SinglePatientDataset(data.Dataset):
         patch_t = rearrange_channels_torch(patch_t)
         return patch_t
 
-if __name__ == "__main__":
-    data_root = r"D:\path\to\NIFTI"
-    pid = 123
-    study_yr = 2008
-    ds = SinglePatientDataset(data_root, pid, study_yr)
-    print("Anzahl Patches:", len(ds))
-    from torch.utils.data import DataLoader
-    loader = DataLoader(ds, batch_size=4, shuffle=False)
-    for i, patch_batch in enumerate(loader):
-        print(f"Batch {i}, shape={patch_batch.shape}")
-        break
+# if __name__ == "__main__":
+#     #data_root = r"D:\path\to\NIFTI"
+#     # pid = 123
+#     # study_yr = 2008
+#     # ds = SinglePatientDataset(data_root, pid, study_yr)
+#     # print("Anzahl Patches:", len(ds))
+#     # from torch.utils.data import DataLoader
+#     # loader = DataLoader(ds, batch_size=4, shuffle=False)
+#     # for i, patch_batch in enumerate(loader):
+#     #     print(f"Batch {i}, shape={patch_batch.shape}")
+#     #     break

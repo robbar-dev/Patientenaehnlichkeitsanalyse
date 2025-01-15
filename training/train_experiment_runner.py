@@ -28,6 +28,7 @@ def run_experiment(cfg):
 
     # 2) Trainer anlegen
     trainer = TripletTrainer(
+        aggregator_name="max", 
         df=df_train,
         data_root=cfg["data_root"],
         device='cuda',  # oder cfg.get("device", "cuda")
@@ -73,14 +74,87 @@ def main():
     # Liste von Experiment-Konfigurationen
     experiments = [
       {
-        "exp_name": "Exp01_margin1.0_lr1e-4_drop0.2",
+        "exp_name": "MMM_Exp01_max",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
 
-        "epochs": 10,
-        "num_triplets": 500,
+        "aggregator_name": "max",
+        "epochs": 20,
+        "num_triplets": 1000,
         "lr": 1e-4,
+        "margin": 1.0,
+        "roi_size": (96,96,3),
+        "overlap": (10,10,1),
+        "attention_hidden_dim": 128,
+        "dropout": 0.2,
+        "weight_decay": 1e-4,
+        "use_scheduler": False
+      },
+      {
+        "exp_name": "MMM_Exp02_mean",
+        "train_csv": TRAIN_CSV,
+        "val_csv":   VAL_CSV,
+        "data_root": DATA_ROOT,
+
+        "aggregator_name": "mean",
+        "epochs": 20,
+        "num_triplets": 1000,
+        "lr": 1e-4,
+        "margin": 1.0,
+        "roi_size": (96,96,3),
+        "overlap": (10,10,1),
+        "attention_hidden_dim": 128,
+        "dropout": 0.2,
+        "weight_decay": 1e-4,
+        "use_scheduler": False
+      },
+      {
+        "exp_name": "MMM_Exp03_mil",
+        "train_csv": TRAIN_CSV,
+        "val_csv":   VAL_CSV,
+        "data_root": DATA_ROOT,
+
+        "aggregator_name": "mil",
+        "epochs": 20,
+        "num_triplets": 1000,
+        "lr": 1e-4,
+        "margin": 1.0,
+        "roi_size": (96,96,3),
+        "overlap": (10,10,1),
+        "attention_hidden_dim": 128,
+        "dropout": 0.2,
+        "weight_decay": 1e-4,
+        "use_scheduler": False
+      }, 
+      {
+        "exp_name": "MMM_Exp04_max_lr_1e-5",
+        "train_csv": TRAIN_CSV,
+        "val_csv":   VAL_CSV,
+        "data_root": DATA_ROOT,
+
+        "aggregator_name": "max",
+        "epochs": 20,
+        "num_triplets": 1000,
+        "lr": 1e-5,
+        "margin": 1.0,
+        "roi_size": (96,96,3),
+        "overlap": (10,10,1),
+        "attention_hidden_dim": 128,
+        "dropout": 0.2,
+        "weight_decay": 1e-4,
+        "use_scheduler": False
+      },
+      {
+        "exp_name": "MMM_Exp05_mean_lr_1e-5",
+        "train_csv": TRAIN_CSV,
+        "val_csv":   VAL_CSV,
+        "data_root": DATA_ROOT,
+
+        "aggregator_name": "mean",
+        "epochs": 20,
+        "num_triplets": 1000,
+        "lr": 1e-5,
         "margin": 1.0,
         "roi_size": (96,96,3),
         "overlap": (10,10,1),
@@ -90,90 +164,23 @@ def main():
         "use_scheduler": False
       },
       {
-        "exp_name": "Exp02_margin1.2_lr1e-4_drop0.2",
+        "exp_name": "MMM_Exp06_mil_lr_1e-5",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
 
-        "epochs": 10,
-        "num_triplets": 500,
-        "lr": 1e-4,
-        "margin": 1.2,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-5,
-        "use_scheduler": False
-      },
-      {
-        "exp_name": "Exp03_margin0.8_lr1e-4_drop0.2",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
-
-        "epochs": 10,
-        "num_triplets": 500,
-        "lr": 1e-4,
-        "margin": 0.8,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-5,
-        "use_scheduler": False
-    },
-    {
-        "exp_name": "Exp04_margin1.0_lr5e-5_drop0.3",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
-
-        "epochs": 10,
-        "num_triplets": 500,
-        "lr": 5e-5,
+        "aggregator_name": "mil",
+        "epochs": 20,
+        "num_triplets": 1000,
+        "lr": 1e-5,
         "margin": 1.0,
         "roi_size": (96,96,3),
         "overlap": (10,10,1),
         "attention_hidden_dim": 128,
-        "dropout": 0.3,
-        "weight_decay": 1e-5,
-        "use_scheduler": False
-    },
-    {
-        "exp_name": "Exp05_margin1.2_lr1e-4_drop0.1",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
-
-        "epochs": 10,
-        "num_triplets": 500,
-        "lr": 1e-4,
-        "margin": 1.2,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.1,
-        "weight_decay": 1e-5,
-        "use_scheduler": False
-    },
-    {
-        "exp_name": "Exp06_margin1.5_lr1e-3_drop0.2_sched",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
-
-        "epochs": 10,
-        "num_triplets": 500,
-        "lr": 1e-3,
-        "margin": 1.5,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
         "dropout": 0.2,
         "weight_decay": 1e-5,
-        "use_scheduler": True
-    },
+        "use_scheduler": False
+      }
     ]
 
     # CSV-Ausgabedatei
@@ -182,7 +189,7 @@ def main():
     # Header definieren
     csv_header = [
         "ExpName", "Epochs", "NumTriplets", 
-        "LR", "Margin", "Dropout", "WeightDecay", 
+        "LR", "Aggregator","Margin", "Dropout", "WeightDecay", 
         "UseScheduler", "BestValMAP", "BestEpoch", 
         "Timestamp"
     ]
@@ -207,6 +214,7 @@ def main():
             cfg["epochs"],
             cfg["num_triplets"],
             cfg["lr"],
+            cfg["aggregator_name"],
             cfg["margin"],
             cfg["dropout"],
             cfg["weight_decay"],

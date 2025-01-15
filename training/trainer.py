@@ -14,6 +14,8 @@ if project_root not in sys.path:
 
 from model.base_cnn import BaseCNN
 from model.mil_aggregator import AttentionMILAggregator
+from model.max_pooling import MaxPoolingAggregator
+from model.mean_pooling import MeanPoolingAggregator
 from training.triplet_sampler import TripletSampler
 from training.data_loader import SinglePatientDataset
 
@@ -37,6 +39,7 @@ class TripletTrainer(nn.Module):
     """
 
     def __init__(self,
+                 aggregator_name, 
                  df,
                  data_root,
                  device='cuda',
@@ -72,12 +75,26 @@ class TripletTrainer(nn.Module):
         # A) CNN-Backbone
         self.base_cnn = BaseCNN(model_name='resnet18', pretrained=pretrained).to(device)
 
-        # B) Attention-MIL Aggregator
-        self.mil_agg = AttentionMILAggregator(
-            in_dim=512,
-            hidden_dim=attention_hidden_dim,
-            dropout=dropout
-        ).to(device)
+        # B) Aggregator MIL, MAX or MEAN
+        if aggregator_name == "mil": 
+            self.mil_agg = AttentionMILAggregator(
+                in_dim=512,
+                hidden_dim=attention_hidden_dim,
+                dropout=dropout
+            ).to(device)
+        elif aggregator_name == "max":
+            self.mil_agg = MaxPoolingAggregator().to(device)
+        elif aggregator_name == "mean":
+            self.mil_agg = MeanPoolingAggregator().to(device)
+        else:
+            raise ValueError(f"Unbekannter Aggregator: {aggregator_name}")
+
+        # B) MIL-Aggregator
+        # self.mil_agg = AttentionMILAggregator(
+        #     in_dim=512,
+        #     hidden_dim=attention_hidden_dim,
+        #     dropout=dropout
+        # ).to(device)
 
         # C) TripletLoss
         self.triplet_loss_fn = nn.TripletMarginLoss(margin=margin, p=2)
