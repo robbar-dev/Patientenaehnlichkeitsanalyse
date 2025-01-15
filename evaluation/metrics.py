@@ -13,7 +13,7 @@ if project_root not in sys.path:
 
 from training.data_loader import SinglePatientDataset
 
-from training.trainer import TripletTrainer
+#from training.trainer import TripletTrainer
 
 ################################################################################
 # 1) compute_embeddings: Für jeden Patienten in df -> CNN+MIL -> embedding
@@ -38,7 +38,7 @@ def compute_embeddings(
                   embedding_tensor: shape (d,) oder (1,d)
                   combination: string
     """
-    # Wichtig: Wir nutzen hier den Trainer, der compute_patient_embedding(...) bereitstellt
+    # Wichtig: Hier der Trainer, der compute_patient_embedding(...) bereitstellt
     trainer.device = device  # nur als Sicherheit
     trainer.base_cnn.eval()
     trainer.mil_agg.eval()
@@ -66,7 +66,7 @@ def compute_embeddings(
 ################################################################################
 def compute_precision_recall_map(
     embeddings,
-    K=5,
+    K=20,
     distance_metric='euclidean'
 ):
     """
@@ -213,13 +213,13 @@ if __name__ == "__main__":
 
     # Erstelle / Lade dein Trainer-Modell (vllt. trainiertes)
     # => Pseudocode:
-    trainer = TripletTrainer(
-        df=None,  # hier irrelevant
-        data_root=data_root,
-        device='cuda',
-        lr=1e-4,
-        margin=1.0
-        # ...
-    )
+    # trainer = TripletTrainer(
+    #     df=None,  # hier irrelevant
+    #     data_root=data_root,
+    #     device='cuda',
+    #     lr=1e-4,
+    #     margin=1.0
+    #     # ...
+    # )
 
-    evaluate_model(trainer, data_csv, data_root, K=5, distance_metric='euclidean', device='cuda')
+    #evaluate_model(trainer, data_csv, data_root, K=5, distance_metric='euclidean', device='cuda')
