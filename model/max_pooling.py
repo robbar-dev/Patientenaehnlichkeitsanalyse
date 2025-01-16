@@ -2,9 +2,6 @@ import torch
 import torch.nn as nn
 import logging
 
-
-
-
 class MaxPoolingAggregator(nn.Module):
     """
     Ein einfacher Aggregator, der Patch-Embeddings via max pooling aggregiert.
@@ -14,7 +11,6 @@ class MaxPoolingAggregator(nn.Module):
     def __init__(self):
         super().__init__()
         logging.info(f"Using Aggregator: {self.__class__.__name__}")
-    
 
     def forward(self, patch_embs):
         """
