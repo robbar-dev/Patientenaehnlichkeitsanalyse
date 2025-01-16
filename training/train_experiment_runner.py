@@ -28,7 +28,7 @@ def run_experiment(cfg):
 
     # 2) Trainer anlegen
     trainer = TripletTrainer(
-        aggregator_name="max", 
+        aggregator_name=cfg["aggregator_name"], 
         df=df_train,
         data_root=cfg["data_root"],
         device='cuda',  # oder cfg.get("device", "cuda")
@@ -39,7 +39,8 @@ def run_experiment(cfg):
         pretrained=False,
         attention_hidden_dim=cfg["attention_hidden_dim"],
         dropout=cfg["dropout"],
-        weight_decay=cfg["weight_decay"]
+        weight_decay=cfg["weight_decay"], 
+        freeze_blocks=cfg["freeze_blocks"]
     )
 
     # Optional: Scheduler
@@ -80,16 +81,17 @@ def main():
         "data_root": DATA_ROOT,
 
         "aggregator_name": "max",
-        "epochs": 20,
-        "num_triplets": 1000,
-        "lr": 1e-4,
+        "epochs": 1,
+        "num_triplets": 750,
+        "lr": 1e-5,
         "margin": 1.0,
         "roi_size": (96,96,3),
         "overlap": (10,10,1),
         "attention_hidden_dim": 128,
         "dropout": 0.2,
         "weight_decay": 1e-4,
-        "use_scheduler": False
+        "use_scheduler": False, 
+        "freeze_blocks": [0,1]
       },
       {
         "exp_name": "MMM_Exp02_mean",
@@ -98,16 +100,17 @@ def main():
         "data_root": DATA_ROOT,
 
         "aggregator_name": "mean",
-        "epochs": 20,
-        "num_triplets": 1000,
-        "lr": 1e-4,
+        "epochs": 1,
+        "num_triplets": 750,
+        "lr": 1e-5,
         "margin": 1.0,
         "roi_size": (96,96,3),
         "overlap": (10,10,1),
         "attention_hidden_dim": 128,
         "dropout": 0.2,
         "weight_decay": 1e-4,
-        "use_scheduler": False
+        "use_scheduler": False,
+        "freeze_blocks": [0,1]
       },
       {
         "exp_name": "MMM_Exp03_mil",
@@ -116,26 +119,8 @@ def main():
         "data_root": DATA_ROOT,
 
         "aggregator_name": "mil",
-        "epochs": 20,
-        "num_triplets": 1000,
-        "lr": 1e-4,
-        "margin": 1.0,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": False
-      }, 
-      {
-        "exp_name": "MMM_Exp04_max_lr_1e-5",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
-
-        "aggregator_name": "max",
-        "epochs": 20,
-        "num_triplets": 1000,
+        "epochs": 1,
+        "num_triplets": 750,
         "lr": 1e-5,
         "margin": 1.0,
         "roi_size": (96,96,3),
@@ -143,43 +128,8 @@ def main():
         "attention_hidden_dim": 128,
         "dropout": 0.2,
         "weight_decay": 1e-4,
-        "use_scheduler": False
-      },
-      {
-        "exp_name": "MMM_Exp05_mean_lr_1e-5",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
-
-        "aggregator_name": "mean",
-        "epochs": 20,
-        "num_triplets": 1000,
-        "lr": 1e-5,
-        "margin": 1.0,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-5,
-        "use_scheduler": False
-      },
-      {
-        "exp_name": "MMM_Exp06_mil_lr_1e-5",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
-
-        "aggregator_name": "mil",
-        "epochs": 20,
-        "num_triplets": 1000,
-        "lr": 1e-5,
-        "margin": 1.0,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-5,
-        "use_scheduler": False
+        "use_scheduler": False,
+        "freeze_blocks": [0,1]
       }
     ]
 

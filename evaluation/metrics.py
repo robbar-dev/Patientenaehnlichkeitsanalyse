@@ -66,7 +66,7 @@ def compute_embeddings(
 ################################################################################
 def compute_precision_recall_map(
     embeddings,
-    K=20,
+    K=10,
     distance_metric='euclidean'
 ):
     """

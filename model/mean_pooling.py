@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import logging
 
 class MeanPoolingAggregator(nn.Module):
     """
@@ -9,7 +10,7 @@ class MeanPoolingAggregator(nn.Module):
     """
     def __init__(self):
         super().__init__()
-        # Kein Parameter nötig, rein "parametrischer" Aggregator
+        logging.info(f"Using Aggregator: {self.__class__.__name__}")
 
     def forward(self, patch_embs):
         """

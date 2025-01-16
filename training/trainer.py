@@ -19,18 +19,16 @@ from model.mean_pooling import MeanPoolingAggregator
 from training.triplet_sampler import TripletSampler
 from training.data_loader import SinglePatientDataset
 
-# Wichtig: Wir importieren evaluate_model, damit train_with_val() 
-# es direkt aufrufen kann (Val-Prozess).
-# Du kannst es auch dynamisch importieren, 
-# oder Du übergibst eine Funktion evaluate_fn(...) an train_with_val(...).
+# Wichtig: Wir importieren evaluate_model, 
+# damit train_with_val() das Val-Prozess direkt durchführen kann.
 from evaluation.metrics import evaluate_model
 
 class TripletTrainer(nn.Module):
     """
-    Ein erweiterter Trainer, der nn.Module erbt, um state_dict() und load_state_dict() 
+    Ein erweiterter Trainer, der nn.Module erbt, um state_dict() und load_state_dict()
     nativ verwenden zu können. Enthält:
-    - base_cnn (ResNet18)
-    - mil_agg (Attention-MIL)
+    - base_cnn (ResNet18) mit optional teilweisem Freeze
+    - mil_agg (verschiedene Aggregatoren: AttentionMIL, MaxPooling, MeanPooling)
     - triplet_loss
     - optimizer
     - optional: scheduler
@@ -38,21 +36,25 @@ class TripletTrainer(nn.Module):
     - save_checkpoint / load_checkpoint
     """
 
-    def __init__(self,
-                 aggregator_name, 
-                 df,
-                 data_root,
-                 device='cuda',
-                 lr=1e-3,
-                 margin=1.0,
-                 roi_size=(96, 96, 3),
-                 overlap=(10, 10, 1),
-                 pretrained=False,
-                 attention_hidden_dim=128,
-                 dropout=0.2,
-                 weight_decay=1e-5):
+    def __init__(
+        self,
+        aggregator_name,
+        df,
+        data_root,
+        device='cuda',
+        lr=1e-3,
+        margin=1.0,
+        roi_size=(96, 96, 3),
+        overlap=(10, 10, 1),
+        pretrained=False,
+        attention_hidden_dim=128,
+        dropout=0.2,
+        weight_decay=1e-5,
+        freeze_blocks=None
+    ):
         """
         Args:
+            aggregator_name: 'mil', 'max', oder 'mean' -> welcher Aggregator
             df: Pandas DataFrame mit Spalten [pid, study_yr, combination]
             data_root: Pfad zu den .nii.gz NIfTI-Daten
             device: 'cuda' oder 'cpu'
@@ -63,6 +65,9 @@ class TripletTrainer(nn.Module):
             attention_hidden_dim: Größe der Hidden-Layer im Attention-MLP
             dropout: Dropout-Rate im Aggregator
             weight_decay: L2-Reg für den Optimizer
+            freeze_blocks: None oder Liste von Block-Indizes, 
+                           um bestimmte ResNet-Blocks einzufrieren 
+                           (z. B. [0,1] => layer1+layer2)
         """
         super().__init__()
 
@@ -72,11 +77,15 @@ class TripletTrainer(nn.Module):
         self.roi_size = roi_size
         self.overlap = overlap
 
-        # A) CNN-Backbone
-        self.base_cnn = BaseCNN(model_name='resnet18', pretrained=pretrained).to(device)
+        # A) CNN-Backbone mit partial freezing
+        self.base_cnn = BaseCNN(
+            model_name='resnet18',
+            pretrained=pretrained,
+            freeze_blocks=freeze_blocks
+        ).to(device)
 
-        # B) Aggregator MIL, MAX or MEAN
-        if aggregator_name == "mil": 
+        # B) Aggregator: MIL, MAX oder MEAN
+        if aggregator_name == "mil":
             self.mil_agg = AttentionMILAggregator(
                 in_dim=512,
                 hidden_dim=attention_hidden_dim,
@@ -89,17 +98,11 @@ class TripletTrainer(nn.Module):
         else:
             raise ValueError(f"Unbekannter Aggregator: {aggregator_name}")
 
-        # B) MIL-Aggregator
-        # self.mil_agg = AttentionMILAggregator(
-        #     in_dim=512,
-        #     hidden_dim=attention_hidden_dim,
-        #     dropout=dropout
-        # ).to(device)
-
         # C) TripletLoss
         self.triplet_loss_fn = nn.TripletMarginLoss(margin=margin, p=2)
 
-        # D) Optimizer
+        # D) Optimizer (alle Parameter, die requires_grad=True, 
+        # also base_cnn + aggregator)
         self.optimizer = optim.Adam(
             list(self.base_cnn.parameters()) + list(self.mil_agg.parameters()),
             lr=lr,
@@ -113,7 +116,11 @@ class TripletTrainer(nn.Module):
         self.best_val_map = 0.0
         self.best_val_epoch = -1
 
-        logging.info(f"TripletTrainer init: lr={lr}, margin={margin}, dropout={dropout}, weight_decay={weight_decay}")
+        logging.info(
+            f"TripletTrainer init: aggregator={aggregator_name}, "
+            f"lr={lr}, margin={margin}, dropout={dropout}, weight_decay={weight_decay}, "
+            f"freeze_blocks={freeze_blocks}"
+        )
 
     # --------------------------------------------------------------------------
     # (1) compute_patient_embedding: Inferenz (Val/Test) => (1,512)
@@ -138,6 +145,7 @@ class TripletTrainer(nn.Module):
                 all_embs.append(emb)
 
         if len(all_embs) == 0:
+            # Keine Patches
             return torch.zeros((1,512), device=self.device)
 
         patch_embs = torch.cat(all_embs, dim=0)  # => (N_patches,512)
@@ -166,6 +174,7 @@ class TripletTrainer(nn.Module):
             patch_embs.append(emb)
 
         if len(patch_embs) == 0:
+            # Keine Patches
             return torch.zeros((1,512), device=self.device, requires_grad=True)
 
         patch_embs = torch.cat(patch_embs, dim=0)
@@ -199,7 +208,7 @@ class TripletTrainer(nn.Module):
             if step % 250 == 0:
                 logging.info(f"[Step {step}] Triplet Loss = {loss.item():.4f}")
 
-        avg_loss = total_loss / steps if steps>0 else 0.0
+        avg_loss = total_loss / steps if steps > 0 else 0.0
         logging.info(f"Epoch Loss = {avg_loss:.4f}")
 
     # --------------------------------------------------------------------------
@@ -212,7 +221,7 @@ class TripletTrainer(nn.Module):
             shuffle=True,
             top_k_negatives=3
         )
-        for epoch in range(1, num_epochs+1):
+        for epoch in range(1, num_epochs + 1):
             logging.info(f"=== EPOCH {epoch}/{num_epochs} ===")
             self.train_one_epoch(sampler)
             if self.scheduler is not None:
@@ -240,16 +249,12 @@ class TripletTrainer(nn.Module):
         Returns:
             (best_val_map, best_val_epoch)
         """
-        from evaluation.metrics import evaluate_model
-
         self.best_val_map = 0.0
         self.best_val_epoch = -1
 
-        for epoch in range(1, epochs+1):
-            logging.info(f"\n=== EPOCH {epoch}/{epochs} (Train) ===")
+        for epoch in range(1, epochs + 1):
             self.train_loop(num_epochs=1, num_triplets=num_triplets)  # 1 Epoche train
 
-            logging.info(f"=== EPOCH {epoch}/{epochs} (Validation) ===")
             val_metrics = evaluate_model(
                 trainer=self,
                 data_csv=val_csv,
@@ -278,7 +283,7 @@ class TripletTrainer(nn.Module):
         """
         checkpoint = {
             'base_cnn': self.base_cnn.state_dict(),
-            'mil_agg': self.mil_agg.state_dict(),
+            'mil_agg':  self.mil_agg.state_dict(),
             'optimizer': self.optimizer.state_dict()
         }
         if self.scheduler is not None:
@@ -312,7 +317,10 @@ if __name__ == "__main__":
     data_root = r"D:\thesis_robert\NLST_subset_v5_nifti_3mm_Voxel"
     df = pd.read_csv(data_csv)
 
+    # Beispiel: aggregator="max", freeze_blocks=[0,1] => 
+    # => Aggregator = MaxPooling, layer1+layer2 von ResNet18 eingefroren
     trainer = TripletTrainer(
+        aggregator_name="max",
         df=df,
         data_root=data_root,
         device='cuda',
@@ -320,16 +328,14 @@ if __name__ == "__main__":
         margin=1.0,
         roi_size=(96,96,3),
         overlap=(10,10,1),
-        pretrained=False,
+        pretrained=True,        # ImageNet-Gewichte
         attention_hidden_dim=128,
         dropout=0.2,
-        weight_decay=1e-5
+        weight_decay=1e-5,
+        freeze_blocks=[0,1]     # layer1, layer2 => freeze
     )
 
-    # Debug: train + val in 2 Epochen
-    # (Angenommen, wir haben noch kein val_csv => hier nur testweise)
-    # trainer.train_with_val(epochs=2, num_triplets=200, val_csv=..., data_root_val=...)
-
-    # Save/Load Checkpoint
+    # Debug: 
+    trainer.train_loop(num_epochs=2, num_triplets=200)
     trainer.save_checkpoint("debug_checkpoint.pt")
     trainer.load_checkpoint("debug_checkpoint.pt")
