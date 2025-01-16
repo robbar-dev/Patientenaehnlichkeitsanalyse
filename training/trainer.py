@@ -14,32 +14,22 @@ if project_root not in sys.path:
 
 from model.base_cnn import BaseCNN
 from model.mil_aggregator import AttentionMILAggregator
-from model.max_pooling import MaxPoolingAggregator
-from model.mean_pooling import MeanPoolingAggregator
 from training.triplet_sampler import TripletSampler
 from training.data_loader import SinglePatientDataset
 
-# Wichtig: Wir importieren evaluate_model, damit train_with_val() 
-# es direkt aufrufen kann (Val-Prozess).
-# Du kannst es auch dynamisch importieren, 
-# oder Du übergibst eine Funktion evaluate_fn(...) an train_with_val(...).
-from evaluation.metrics import evaluate_model
+# Neu für Visualisierung
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
 
 class TripletTrainer(nn.Module):
     """
-    Ein erweiterter Trainer, der nn.Module erbt, um state_dict() und load_state_dict() 
-    nativ verwenden zu können. Enthält:
-    - base_cnn (ResNet18)
-    - mil_agg (Attention-MIL)
-    - triplet_loss
-    - optimizer
-    - optional: scheduler
-    - Methoden: train_loop, train_with_val, compute_patient_embedding, ...
-    - save_checkpoint / load_checkpoint
+    Erweiterter Trainer mit:
+      - train_with_val() + Visualisierung der Embeddings alle 5 Epochen
     """
 
     def __init__(self,
-                 aggregator_name, 
                  df,
                  data_root,
                  device='cuda',
@@ -51,21 +41,7 @@ class TripletTrainer(nn.Module):
                  attention_hidden_dim=128,
                  dropout=0.2,
                  weight_decay=1e-5):
-        """
-        Args:
-            df: Pandas DataFrame mit Spalten [pid, study_yr, combination]
-            data_root: Pfad zu den .nii.gz NIfTI-Daten
-            device: 'cuda' oder 'cpu'
-            lr: Lernrate
-            margin: Triplet-Loss margin
-            roi_size, overlap: Patch-Extraktions-Parameter
-            pretrained: ob ResNet18 auf ImageNet-Weights basiert
-            attention_hidden_dim: Größe der Hidden-Layer im Attention-MLP
-            dropout: Dropout-Rate im Aggregator
-            weight_decay: L2-Reg für den Optimizer
-        """
         super().__init__()
-
         self.df = df
         self.data_root = data_root
         self.device = device
@@ -75,26 +51,12 @@ class TripletTrainer(nn.Module):
         # A) CNN-Backbone
         self.base_cnn = BaseCNN(model_name='resnet18', pretrained=pretrained).to(device)
 
-        # B) Aggregator MIL, MAX or MEAN
-        if aggregator_name == "mil": 
-            self.mil_agg = AttentionMILAggregator(
-                in_dim=512,
-                hidden_dim=attention_hidden_dim,
-                dropout=dropout
-            ).to(device)
-        elif aggregator_name == "max":
-            self.mil_agg = MaxPoolingAggregator().to(device)
-        elif aggregator_name == "mean":
-            self.mil_agg = MeanPoolingAggregator().to(device)
-        else:
-            raise ValueError(f"Unbekannter Aggregator: {aggregator_name}")
-
-        # B) MIL-Aggregator
-        # self.mil_agg = AttentionMILAggregator(
-        #     in_dim=512,
-        #     hidden_dim=attention_hidden_dim,
-        #     dropout=dropout
-        # ).to(device)
+        # B) Attention-MIL Aggregator
+        self.mil_agg = AttentionMILAggregator(
+            in_dim=512,
+            hidden_dim=attention_hidden_dim,
+            dropout=dropout
+        ).to(device)
 
         # C) TripletLoss
         self.triplet_loss_fn = nn.TripletMarginLoss(margin=margin, p=2)
@@ -109,15 +71,15 @@ class TripletTrainer(nn.Module):
         # E) Optional: Scheduler
         self.scheduler = None
 
-        # Zusätzliche Attribute für Best-Val
+        # Attribute für Best-Val
         self.best_val_map = 0.0
         self.best_val_epoch = -1
 
         logging.info(f"TripletTrainer init: lr={lr}, margin={margin}, dropout={dropout}, weight_decay={weight_decay}")
 
-    # --------------------------------------------------------------------------
-    # (1) compute_patient_embedding: Inferenz (Val/Test) => (1,512)
-    # --------------------------------------------------------------------------
+    # --------------------------------------
+    # compute_patient_embedding (Val/Test)
+    # --------------------------------------
     def compute_patient_embedding(self, pid, study_yr):
         ds = SinglePatientDataset(
             data_root=self.data_root,
@@ -140,13 +102,13 @@ class TripletTrainer(nn.Module):
         if len(all_embs) == 0:
             return torch.zeros((1,512), device=self.device)
 
-        patch_embs = torch.cat(all_embs, dim=0)  # => (N_patches,512)
+        patch_embs = torch.cat(all_embs, dim=0)  # => (N,512)
         patient_emb = self.mil_agg(patch_embs)   # => (1,512)
         return patient_emb
 
-    # --------------------------------------------------------------------------
-    # (2) _forward_patient: Training => (1,512) mit Grad
-    # --------------------------------------------------------------------------
+    # --------------------------------------
+    # _forward_patient (Training)
+    # --------------------------------------
     def _forward_patient(self, pid, study_yr):
         ds = SinglePatientDataset(
             data_root=self.data_root,
@@ -162,7 +124,7 @@ class TripletTrainer(nn.Module):
 
         for patch_t in loader:
             patch_t = patch_t.to(self.device)
-            emb = self.base_cnn(patch_t)
+            emb = self.base_cnn(patch_t)  # => (B,512)
             patch_embs.append(emb)
 
         if len(patch_embs) == 0:
@@ -172,9 +134,9 @@ class TripletTrainer(nn.Module):
         patient_emb = self.mil_agg(patch_embs)  # => (1,512)
         return patient_emb
 
-    # --------------------------------------------------------------------------
-    # (3) train_one_epoch => Triplet-Loss
-    # --------------------------------------------------------------------------
+    # --------------------------------------
+    # train_one_epoch => Triplet-Loss
+    # --------------------------------------
     def train_one_epoch(self, sampler):
         total_loss = 0.0
         steps = 0
@@ -202,9 +164,9 @@ class TripletTrainer(nn.Module):
         avg_loss = total_loss / steps if steps>0 else 0.0
         logging.info(f"Epoch Loss = {avg_loss:.4f}")
 
-    # --------------------------------------------------------------------------
-    # (4) train_loop => Sampler => num_epochs
-    # --------------------------------------------------------------------------
+    # --------------------------------------
+    # train_loop => Schleife
+    # --------------------------------------
     def train_loop(self, num_epochs=2, num_triplets=100):
         sampler = TripletSampler(
             df=self.df,
@@ -222,7 +184,7 @@ class TripletTrainer(nn.Module):
             sampler.reset_epoch()
 
     # --------------------------------------------------------------------------
-    # (5) train_with_val => Train + Val in einem Rutsch
+    # (NEU) train_with_val => Train + Val + Visualisierung
     # --------------------------------------------------------------------------
     def train_with_val(self,
                        epochs,
@@ -230,12 +192,16 @@ class TripletTrainer(nn.Module):
                        val_csv,
                        data_root_val,
                        K=5,
-                       distance_metric='euclidean'):
+                       distance_metric='euclidean',
+                       visualize_every=5,
+                       visualize_method='tsne',
+                       output_dir='plots'):
         """
-        Führt ein Training über 'epochs' Epochen durch, 
-        mit 'num_triplets' pro Epoche, 
-        validiert nach jeder Epoche auf 'val_csv' 
-        und trackt best_mAP in self.best_val_map.
+        Führt ein Training + Validierung durch.
+        - Alle 'epochs'
+        - pro Epoche => train_loop(num_epochs=1)
+        - anschließend Evaluate + Track best_val_map
+        - optional: Visualisierung Embeddings alle 'visualize_every' Epochen
 
         Returns:
             (best_val_map, best_val_epoch)
@@ -245,10 +211,15 @@ class TripletTrainer(nn.Module):
         self.best_val_map = 0.0
         self.best_val_epoch = -1
 
+        # Damit wir das val_df zur Visualisierung haben:
+        df_val = pd.read_csv(val_csv)
+
         for epoch in range(1, epochs+1):
             logging.info(f"\n=== EPOCH {epoch}/{epochs} (Train) ===")
-            self.train_loop(num_epochs=1, num_triplets=num_triplets)  # 1 Epoche train
+            # 1 Epoche train
+            self.train_loop(num_epochs=1, num_triplets=num_triplets)
 
+            # Evaluate
             logging.info(f"=== EPOCH {epoch}/{epochs} (Validation) ===")
             val_metrics = evaluate_model(
                 trainer=self,
@@ -261,21 +232,92 @@ class TripletTrainer(nn.Module):
             current_map = val_metrics['mAP']
             logging.info(f"Val-Epoch={epoch}: mAP={current_map:.4f}")
 
+            # Track Best
             if current_map > self.best_val_map:
                 self.best_val_map = current_map
                 self.best_val_epoch = epoch
                 logging.info(f"=> Neuer Best mAP={self.best_val_map:.4f} in Epoche {self.best_val_epoch}")
 
+            # Visualisierung => alle x Epochen
+            if epoch % visualize_every == 0:
+                self.visualize_embeddings(
+                    df=df_val,
+                    data_root=data_root_val,
+                    method=visualize_method,
+                    epoch=epoch,
+                    output_dir=output_dir
+                )
+
         return (self.best_val_map, self.best_val_epoch)
 
     # --------------------------------------------------------------------------
-    # (6) Checkpoint speichern
+    # Visualisierung der Embeddings => t-SNE oder PCA
+    # --------------------------------------------------------------------------
+    def visualize_embeddings(self,
+                             df,
+                             data_root,
+                             method='tsne',
+                             epoch=0,
+                             output_dir='plots'):
+        """
+        Berechnet Embeddings für alle PIDs in df, führt t-SNE oder PCA auf 2D durch,
+        zeichnet Scatter-Plot mit Färbung nach 'combination', speichert PNG.
+
+        df: DataFrame [pid, study_yr, combination]
+        method: 'tsne' oder 'pca'
+        epoch: Epochenzahl (für Dateinamen)
+        output_dir: Wohin PNG gespeichert wird
+        """
+        logging.info(f"Visualisiere Embeddings => {method.upper()}, EPOCH={epoch}")
+        # 1) Alle Embeddings + combos sammeln
+        embeddings_list = []
+        combos = []
+        for i, row in df.iterrows():
+            pid = row['pid']
+            study_yr = row['study_yr']
+            combo = row['combination']
+
+            emb = self.compute_patient_embedding(pid, study_yr)  # => (1,512)
+            emb_np = emb.squeeze(0).cpu().numpy()  # => (512,)
+            embeddings_list.append(emb_np)
+            combos.append(combo)
+
+        embeddings_arr = np.array(embeddings_list)  # shape (N,512)
+
+        # 2) Reduktion => PCA oder TSNE
+        if method.lower() == 'tsne':
+            projector = TSNE(n_components=2, random_state=42)
+        else:
+            projector = PCA(n_components=2, random_state=42)
+
+        coords_2d = projector.fit_transform(embeddings_arr)  # shape (N,2)
+
+        # 3) Plot
+        plt.figure(figsize=(8,6))
+        combos_unique = sorted(list(set(combos)))
+        # Farbkodierung pro combo
+        for c in combos_unique:
+            idxs = [idx for idx, val in enumerate(combos) if val == c]
+            plt.scatter(coords_2d[idxs, 0],
+                        coords_2d[idxs, 1],
+                        label=str(c),
+                        alpha=0.6)
+
+        plt.title(f"{method.upper()} Embeddings - EPOCH={epoch}")
+        plt.legend(loc='best')
+        # 4) Speichern
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        filename = os.path.join(output_dir, f"Emb_{method}_{epoch:03d}.png")
+        plt.savefig(filename, dpi=150)
+        plt.close()
+        logging.info(f"Saved embedding plot: {filename}")
+
+    # --------------------------------------------------------------------------
+    # save_checkpoint / load_checkpoint
     # --------------------------------------------------------------------------
     def save_checkpoint(self, path):
-        """
-        Speichert base_cnn, mil_agg, optimizer, optional scheduler
-        als state_dict in path.
-        """
         checkpoint = {
             'base_cnn': self.base_cnn.state_dict(),
             'mil_agg': self.mil_agg.state_dict(),
@@ -287,9 +329,6 @@ class TripletTrainer(nn.Module):
         torch.save(checkpoint, path)
         logging.info(f"Checkpoint saved to {path}")
 
-    # --------------------------------------------------------------------------
-    # (7) Checkpoint laden
-    # --------------------------------------------------------------------------
     def load_checkpoint(self, path):
         checkpoint = torch.load(path, map_location=self.device)
         self.base_cnn.load_state_dict(checkpoint['base_cnn'])
@@ -301,35 +340,40 @@ class TripletTrainer(nn.Module):
         logging.info(f"Checkpoint loaded from {path}")
 
 
-# ------------------------------------------------------------------------------
-# Debug
-# ------------------------------------------------------------------------------
 if __name__ == "__main__":
     import logging
     logging.basicConfig(level=logging.INFO)
 
-    data_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv"
-    data_root = r"D:\thesis_robert\NLST_subset_v5_nifti_3mm_Voxel"
-    df = pd.read_csv(data_csv)
+    # # Kurzer Debug-Test
+    # data_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv"
+    # data_root = r"D:\thesis_robert\NLST_subset_v5_nifti_3mm_Voxel"
+    # df = pd.read_csv(data_csv)
 
-    trainer = TripletTrainer(
-        df=df,
-        data_root=data_root,
-        device='cuda',
-        lr=1e-4,
-        margin=1.0,
-        roi_size=(96,96,3),
-        overlap=(10,10,1),
-        pretrained=False,
-        attention_hidden_dim=128,
-        dropout=0.2,
-        weight_decay=1e-5
-    )
+    # trainer = TripletTrainer(
+    #     df=df,
+    #     data_root=data_root,
+    #     device='cuda',
+    #     lr=1e-4,
+    #     margin=1.0,
+    #     roi_size=(96,96,3),
+    #     overlap=(10,10,1),
+    #     pretrained=False,
+    #     attention_hidden_dim=128,
+    #     dropout=0.2,
+    #     weight_decay=1e-5
+    # )
 
-    # Debug: train + val in 2 Epochen
-    # (Angenommen, wir haben noch kein val_csv => hier nur testweise)
-    # trainer.train_with_val(epochs=2, num_triplets=200, val_csv=..., data_root_val=...)
+    # # Beispiel: train_with_val => 2 Epochen, Visualisierung alle 1 Epoche
+    # best_map, best_epoch = trainer.train_with_val(
+    #     epochs=2,
+    #     num_triplets=200,
+    #     val_csv=r"C:\...\nlst_subset_v5_validation.csv",
+    #     data_root_val=data_root,
+    #     K=5,
+    #     distance_metric='euclidean',
+    #     visualize_every=1,         # alle 1 Epochen => debug
+    #     visualize_method='pca',    # oder 'tsne'
+    #     output_dir='plots_debug'
+    # )
 
-    # Save/Load Checkpoint
-    trainer.save_checkpoint("debug_checkpoint.pt")
-    trainer.load_checkpoint("debug_checkpoint.pt")
+    # logging.info(f"FERTIG - best_map={best_map:.4f} epoch={best_epoch}")
