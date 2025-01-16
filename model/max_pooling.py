@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import logging
 
 class MaxPoolingAggregator(nn.Module):
     """
@@ -9,7 +10,7 @@ class MaxPoolingAggregator(nn.Module):
     """
     def __init__(self):
         super().__init__()
-        # Kein Parameter nötig, rein "parametrischer" Freed Aggregator
+        logging.info(f"Using Aggregator: {self.__class__.__name__}")
 
     def forward(self, patch_embs):
         """

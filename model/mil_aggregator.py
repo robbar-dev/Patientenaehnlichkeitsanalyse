@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import logging
 
 class AttentionMILAggregator(nn.Module):
     """
@@ -23,6 +24,7 @@ class AttentionMILAggregator(nn.Module):
           dropout: Dropout-Rate für das Gating-Netzwerk
         """
         super().__init__()
+        logging.info(f"Using Aggregator: {self.__class__.__name__}")
 
         # U und V sind die zwei Pfade (Tanh, Sigmoid)
         #    U: Linear(in_dim -> hidden_dim)
