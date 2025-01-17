@@ -416,8 +416,8 @@ class TripletTrainer(nn.Module):
         epochs_range = list(range(1, len(self.epoch_losses)+1))
         plt.figure(figsize=(8,6))
         plt.plot(epochs_range, self.epoch_losses, marker='o', label="Train Loss", color='navy')
-        plt.title("Verlauf des Trainings-Loss pro Epoche")
-        plt.xlabel("Epoche")
+        plt.title("Progression of Training Loss per Epoch")
+        plt.xlabel("Epoch")
         plt.ylabel("Triplet Loss")
         plt.legend()
 
@@ -471,9 +471,9 @@ class TripletTrainer(nn.Module):
             color='red'
         )
 
-        plt.title("Verlauf von Precision@K, Recall@K und mAP über die Epochen")
-        plt.xlabel("Epoche")
-        plt.ylabel("Metrik-Wert")
+        plt.title("Progression of Precision@K, Recall@K, and mAP over Epochs")
+        plt.xlabel("Epoch")
+        plt.ylabel("Metric Value")
         plt.ylim(0, 1.0)
         plt.legend(loc='best')
 
