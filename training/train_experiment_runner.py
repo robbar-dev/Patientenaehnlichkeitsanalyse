@@ -56,7 +56,7 @@ def run_experiment(cfg):
         num_triplets=cfg["num_triplets"],
         val_csv=cfg["val_csv"],
         data_root_val=cfg["data_root"],
-        K=5,
+        K=10,
         distance_metric="euclidean"
     )
 
@@ -74,53 +74,34 @@ def main():
     # Liste von Experiment-Konfigurationen
     experiments = [
       {
-        "exp_name": "MMM_Exp03_mil",
+        "exp_name": "MMM_Exp10_max",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
 
-        "aggregator_name": "mil",
+        "aggregator_name": "max",
         "epochs": 30,
         "num_triplets": 1000,
-        "lr": 1e-4,
-        "margin": 0.8,
+        "lr": 1e-5,
+        "margin": 1.0,
         "roi_size": (96,96,3),
         "overlap": (10,10,1),
         "attention_hidden_dim": 128,
         "dropout": 0.2,
         "weight_decay": 1e-4,
-        "use_scheduler": False,
+        "use_scheduler": False, 
         "freeze_blocks": [0,1]
       },
       {
-        "exp_name": "MMM_Exp06_mil",
+        "exp_name": "MMM_Exp11_mean",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
 
-        "aggregator_name": "mil",
+        "aggregator_name": "mean",
         "epochs": 30,
         "num_triplets": 1000,
-        "lr": 1e-4,
-        "margin": 0.8,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": False,
-        "freeze_blocks": None
-      }, 
-      {
-        "exp_name": "MMM_Exp09_mil",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
-
-        "aggregator_name": "mil",
-        "epochs": 30,
-        "num_triplets": 1000,
-        "lr": 1e-4,
+        "lr": 1e-5,
         "margin": 1.0,
         "roi_size": (96,96,3),
         "overlap": (10,10,1),
@@ -129,7 +110,26 @@ def main():
         "weight_decay": 1e-4,
         "use_scheduler": False,
         "freeze_blocks": [0,1]
-      }
+      }, 
+      {
+        "exp_name": "MMM_Exp12_mil",
+        "train_csv": TRAIN_CSV,
+        "val_csv":   VAL_CSV,
+        "data_root": DATA_ROOT,
+
+        "aggregator_name": "mil",
+        "epochs": 30,
+        "num_triplets": 1000,
+        "lr": 1e-5,
+        "margin": 1.0,
+        "roi_size": (96,96,3),
+        "overlap": (10,10,1),
+        "attention_hidden_dim": 128,
+        "dropout": 0.2,
+        "weight_decay": 1e-4,
+        "use_scheduler": False,
+        "freeze_blocks": [0,1]
+      }      
     ]
 
     # CSV-Ausgabedatei
@@ -138,16 +138,16 @@ def main():
     # Header definieren
     csv_header = [
         "ExpName", "Epochs", "NumTriplets", 
-        "LR", "Aggregator","Margin", "Dropout", "WeightDecay", 
-        "UseScheduler", "BestValMAP", "BestEpoch", 
-        "Timestamp"
+        "LR", "Aggregator", "Margin", "Dropout", 
+        "WeightDecay", "UseScheduler", "FreezeBlocks", 
+        "BestValMAP", "BestEpoch", "Timestamp"
     ]
 
     # Existiert Datei bereits?
     file_exists = os.path.exists(results_csv)
     if not file_exists:
         with open(results_csv, mode='w', newline='') as f:
-            writer = csv.writer(f)
+            writer = csv.writer(f, delimiter=';')  # Verwende ';' als Trennzeichen
             writer.writerow(csv_header)
 
     # Schleife über alle Experimente
@@ -168,16 +168,18 @@ def main():
             cfg["dropout"],
             cfg["weight_decay"],
             cfg["use_scheduler"],
+            str(cfg["freeze_blocks"]),
             best_map,
             best_epoch,
             now_str
         ]
         with open(results_csv, mode='a', newline='') as f:
-            writer = csv.writer(f)
+            writer = csv.writer(f, delimiter=';')  # Verwende ';' als Trennzeichen
             writer.writerow(row)
 
         logging.info(f"Experiment {cfg['exp_name']} DONE. "
-                     f"best_val_map={best_map:.4f} (epoch={best_epoch})\n")
+                    f"best_val_map={best_map:.4f} (epoch={best_epoch})\n")
+
 
 
 if __name__ == "__main__":
