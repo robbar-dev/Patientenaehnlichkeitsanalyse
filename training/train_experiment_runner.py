@@ -74,44 +74,6 @@ def main():
     # Liste von Experiment-Konfigurationen
     experiments = [
       {
-        "exp_name": "MMM_Exp01_max",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
-
-        "aggregator_name": "max",
-        "epochs": 30,
-        "num_triplets": 1000,
-        "lr": 1e-4,
-        "margin": 0.5,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": False, 
-        "freeze_blocks": [0,1]
-      },
-      {
-        "exp_name": "MMM_Exp02_mean",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
-
-        "aggregator_name": "mean",
-        "epochs": 30,
-        "num_triplets": 1000,
-        "lr": 1e-4,
-        "margin": 0.5,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": False,
-        "freeze_blocks": [0,1]
-      },
-      {
         "exp_name": "MMM_Exp03_mil",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
@@ -121,7 +83,7 @@ def main():
         "epochs": 30,
         "num_triplets": 1000,
         "lr": 1e-4,
-        "margin": 0.5,
+        "margin": 0.8,
         "roi_size": (96,96,3),
         "overlap": (10,10,1),
         "attention_hidden_dim": 128,
@@ -129,44 +91,6 @@ def main():
         "weight_decay": 1e-4,
         "use_scheduler": False,
         "freeze_blocks": [0,1]
-      }, 
-      {
-        "exp_name": "MMM_Exp04_max",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
-
-        "aggregator_name": "max",
-        "epochs": 30,
-        "num_triplets": 1000,
-        "lr": 1e-4,
-        "margin": 0.5,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": False, 
-        "freeze_blocks": None
-      },
-      {
-        "exp_name": "MMM_Exp05_mean",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
-
-        "aggregator_name": "mean",
-        "epochs": 30,
-        "num_triplets": 1000,
-        "lr": 1e-4,
-        "margin": 0.5,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": False,
-        "freeze_blocks": None
       },
       {
         "exp_name": "MMM_Exp06_mil",
@@ -178,7 +102,7 @@ def main():
         "epochs": 30,
         "num_triplets": 1000,
         "lr": 1e-4,
-        "margin": 0.5,
+        "margin": 0.8,
         "roi_size": (96,96,3),
         "overlap": (10,10,1),
         "attention_hidden_dim": 128,
@@ -186,6 +110,25 @@ def main():
         "weight_decay": 1e-4,
         "use_scheduler": False,
         "freeze_blocks": None
+      }, 
+      {
+        "exp_name": "MMM_Exp09_mil",
+        "train_csv": TRAIN_CSV,
+        "val_csv":   VAL_CSV,
+        "data_root": DATA_ROOT,
+
+        "aggregator_name": "mil",
+        "epochs": 30,
+        "num_triplets": 1000,
+        "lr": 1e-4,
+        "margin": 1.0,
+        "roi_size": (96,96,3),
+        "overlap": (10,10,1),
+        "attention_hidden_dim": 128,
+        "dropout": 0.2,
+        "weight_decay": 1e-4,
+        "use_scheduler": False,
+        "freeze_blocks": [0,1]
       }
     ]
 
