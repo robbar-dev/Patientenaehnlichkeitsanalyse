@@ -69,12 +69,12 @@ def main():
     # Pfade definieren:
     TRAIN_CSV = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv"
     VAL_CSV   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\validation\nlst_subset_v5_validation.csv"
-    DATA_ROOT = r"D:\thesis_robert\NLST_subset_v5_nifti_3mm_Voxel"
+    DATA_ROOT = r"D:\thesis_robert\NLST_subset_v5_nifti_1_5mm_Voxel"
 
     # Liste von Experiment-Konfigurationen
     experiments = [
       {
-        "exp_name": "MMM_Exp10_max",
+        "exp_name": "MMM_Exp13_max",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
@@ -93,7 +93,7 @@ def main():
         "freeze_blocks": [0,1]
       },
       {
-        "exp_name": "MMM_Exp11_mean",
+        "exp_name": "MMM_Exp14_mean",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
@@ -112,7 +112,7 @@ def main():
         "freeze_blocks": [0,1]
       }, 
       {
-        "exp_name": "MMM_Exp12_mil",
+        "exp_name": "MMM_Exp15_mil",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
@@ -129,7 +129,7 @@ def main():
         "weight_decay": 1e-4,
         "use_scheduler": False,
         "freeze_blocks": [0,1]
-      }      
+      },    
     ]
 
     # CSV-Ausgabedatei
@@ -179,8 +179,6 @@ def main():
 
         logging.info(f"Experiment {cfg['exp_name']} DONE. "
                     f"best_val_map={best_map:.4f} (epoch={best_epoch})\n")
-
-
 
 if __name__ == "__main__":
     main()

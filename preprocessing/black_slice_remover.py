@@ -106,5 +106,5 @@ if __name__ == "__main__":
     main()
 
 
-# python preprocessing\black_slice_remover.py --input_dir "D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel_with_black_slices" --output_dir "D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel"
+# python preprocessing\black_slice_remover.py --input_dir "D:\thesis_robert\subset_v2\NLST_subset_v2_nifti_unverarbeitet" --output_dir "D:\thesis_robert\subset_v2_black_slices_removed"
 

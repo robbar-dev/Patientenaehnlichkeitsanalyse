@@ -3,7 +3,6 @@ import os
 import logging
 from tqdm import tqdm
 import numpy as np
-import matplotlib.pyplot as plt
 from monai.transforms import (
     SaveImage,
     LoadImaged,
@@ -17,6 +16,7 @@ from monai.transforms import (
 )
 from monai.data import Dataset, DataLoader, pad_list_data_collate
 import nibabel as nib
+import pandas as pd
 
 # Logging einrichten
 logging.basicConfig(
@@ -28,6 +28,7 @@ logging.basicConfig(
 def resample_and_normalize(
     input_dir,
     output_dir,
+    csv_path,
     target_spacing=(3.0, 3.0, 3.0),
     interpolation="trilinear",
     visualize=False,
@@ -36,6 +37,15 @@ def resample_and_normalize(
 ):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+
+    # CSV-Datei laden
+    csv_data = pd.read_csv(csv_path, sep=',')
+    print("Geladene Daten:")
+    print(csv_data.head())  # Zeigt die ersten 5 Zeilen
+    print("Spaltennamen:", csv_data.columns)
+
+    # Extrahiere gültige PIDs und Study-Jahre aus der CSV-Datei
+    valid_pids_study_yr = set(zip(csv_data['pid'].astype(str), csv_data['study_yr'].astype(str)))
 
     # SaveImage Transform initialisieren
     save_transform = SaveImage(
@@ -53,7 +63,7 @@ def resample_and_normalize(
         LoadImaged(keys=["image"]),
         EnsureChannelFirstd(keys=["image"]),
         Orientationd(keys=["image"], axcodes="LPS"),
-        Rotate90d(keys=["image"], k=2, spatial_axes=(0, 1)),  # Tisch unter den Patienten
+        Rotate90d(keys=["image"], k=2, spatial_axes=(0, 1)),
         Spacingd(keys=["image"], pixdim=target_spacing, mode=interpolation),
         ScaleIntensityRanged(
             keys=["image"],
@@ -64,61 +74,58 @@ def resample_and_normalize(
         EnsureTyped(keys=["image"], data_type="tensor")
     ])
 
-    # Liste aller NIfTI-Dateien erstellen
-    nifti_files = [
-        {"image": os.path.join(input_dir, f)}
-        for f in os.listdir(input_dir)
-        if f.endswith(".nii") or f.endswith(".nii.gz")
-    ]
+    # Liste aller relevanten NIfTI-Dateien erstellen
+    nifti_files = []
+    for f in os.listdir(input_dir):
+        if f.endswith(".nii") or f.endswith(".nii.gz"):
+            print(f"Verarbeite Datei: {f}")  # Debug-Ausgabe
+            try:
+                parts = f.split("_")
+                pid = parts[1]
+                study_yr = parts[4].split(".")[0]
+                print(f"Extrahiert: pid={pid}, study_yr={study_yr}")  # Debug-Ausgabe
+                if (pid, study_yr) in valid_pids_study_yr:
+                    nifti_files.append({"image": os.path.join(input_dir, f)})
+            except IndexError:
+                logging.warning(f"Ungültiger Dateiname: {f}")
+                print(f"Warnung: Ungültiger Dateiname {f}")
 
-    # Warnung ausgeben, wenn keine Dateien gefunden wurden
+
     if not nifti_files:
-        logging.warning(f"Keine NIfTI-Dateien im Verzeichnis {input_dir} gefunden.")
-        print(f"Warnung: Keine NIfTI-Dateien im Verzeichnis {input_dir} gefunden.")
+        logging.warning(f"Keine relevanten NIfTI-Dateien im Verzeichnis {input_dir} gefunden.")
+        print(f"Warnung: Keine relevanten NIfTI-Dateien im Verzeichnis {input_dir} gefunden.")
         return
 
     # Liste der bereits verarbeiteten Dateien erstellen
     processed_filenames = set(os.listdir(output_dir))
-    # Falls die Ausgabedateien die gleiche Erweiterung haben wie die Eingabedateien
-    processed_files = set()
-    for fname in processed_filenames:
-        if fname.endswith(".nii") or fname.endswith(".nii.gz"):
-            processed_files.add(fname)
+    processed_files = {fname for fname in processed_filenames if fname.endswith((".nii", ".nii.gz"))}
 
-    # Vorverarbeitung der Dateiliste: Überprüfen und Entfernen fehlerhafter und bereits verarbeiteter Dateien
+    # Dateien validieren
     valid_nifti_files = []
     invalid_files = []
     skipped_files = []
     for file_dict in nifti_files:
         file_path = file_dict["image"]
         filename = os.path.basename(file_path)
-        output_file_path = os.path.join(output_dir, filename)
-
-        # Überprüfen, ob die Ausgabedatei bereits existiert
         if filename in processed_files:
             print(f"Datei {filename} bereits verarbeitet. Überspringe...")
             logging.info(f"Datei {filename} bereits verarbeitet. Überspringe...")
             skipped_files.append(filename)
             continue
-
         try:
-            # Versuch, die Datei mit nibabel zu laden
             nib.load(file_path)
             valid_nifti_files.append(file_dict)
         except Exception as e:
             print(f"Fehler beim Laden der Datei {file_path}: {e}")
             logging.warning(f"Fehler beim Laden der Datei {file_path}: {e}")
-            # PID aus dem Dateinamen extrahieren und zur Liste hinzufügen
-            pid = filename
-            invalid_files.append(pid)
+            invalid_files.append(filename)
 
-    # Überprüfen, ob nach der Validierung noch Dateien übrig sind
     if not valid_nifti_files:
         logging.warning(f"Keine gültigen und unverarbeiteten NIfTI-Dateien im Verzeichnis {input_dir} gefunden.")
         print(f"Warnung: Keine gültigen und unverarbeiteten NIfTI-Dateien im Verzeichnis {input_dir} gefunden.")
         return
 
-    # Dataset mit den validen Dateien erstellen
+    # Dataset erstellen
     dataset = Dataset(data=valid_nifti_files, transform=transforms)
     loader = DataLoader(
         dataset,
@@ -135,33 +142,13 @@ def resample_and_normalize(
             batch_size_actual = len(batch_data["image"])
             for i in range(batch_size_actual):
                 image = batch_data["image"][i]
-                # Metadaten aus dem MetaTensor abrufen
                 meta = image.meta
                 filename = os.path.basename(meta["filename_or_obj"])
-
-                # Debugging-Ausgabe
-                print(f"Verarbeite Datei: {filename}")
-                print(f"Bildform: {image.shape}")
-                print(f"Verfügbare Metadaten-Schlüssel: {list(meta.keys())}")
-
-                # Daten speichern mit SaveImage
                 save_transform(
                     img=image,
                     meta_data=meta,
                     filename=os.path.join(output_dir, filename)
                 )
-                print(f"Datei gespeichert: {os.path.join(output_dir, filename)}")
-
-                # Optional: Visualisierung
-                if visualize:
-                    print("Visualisierung wird ausgeführt.")
-                    depth = image.shape[-1]
-                    slice_indices = [depth // 4, depth // 2, 3 * depth // 4]
-                    for idx in slice_indices:
-                        plt.imshow(image[0, :, :, idx], cmap="gray")
-                        plt.title(f"Slice {idx}")
-                        plt.show()
-
                 processed_files_count += 1
         except Exception as e:
             logging.exception(f"Fehler bei der Verarbeitung eines Batches: {e}")
@@ -170,7 +157,7 @@ def resample_and_normalize(
 
     print(f"Insgesamt verarbeitete Dateien: {processed_files_count}/{total_files}")
 
-    # Liste der fehlerhaften PIDs speichern
+    # Zusammenfassung speichern
     if invalid_files or skipped_files:
         summary_path = os.path.join(output_dir, "processing_summary.txt")
         with open(summary_path, 'w') as f:
@@ -189,7 +176,8 @@ def main():
     parser = argparse.ArgumentParser(description="Resampling und Normalisierung von CT-Bildern")
     parser.add_argument("--input_dir", required=True, help="Pfad zu den Eingabedaten")
     parser.add_argument("--output_dir", required=True, help="Pfad zum Speichern der Ausgabedaten")
-    parser.add_argument("--target_spacing", nargs=3, type=float, default=(3.0, 3.0, 3.0), help="Zielauflösung in mm")
+    parser.add_argument("--csv_path", required=True, help="Pfad zur CSV-Datei mit PIDs und study_years")
+    parser.add_argument("--target_spacing", nargs=3, type=float, default=(1.5, 1.5, 1.5), help="Zielauflösung in mm")
     parser.add_argument("--interpolation", default="trilinear", help="Interpolationsmethode")
     parser.add_argument("--visualize", action="store_true", help="Visualisierung der Ergebnisse")
     parser.add_argument("--batch_size", type=int, default=4, help="Batch-Größe für die Verarbeitung")
@@ -199,6 +187,7 @@ def main():
     resample_and_normalize(
         input_dir=args.input_dir,
         output_dir=args.output_dir,
+        csv_path=args.csv_path,
         target_spacing=tuple(args.target_spacing),
         interpolation=args.interpolation,
         visualize=args.visualize,
@@ -209,5 +198,7 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python3.11 preprocessing\resampling_normalization.py --input_dir "D:\thesis_robert\NLST_subset_v5_nifti_3mm_Voxel\corruptedFiles" --output_dir "D:\thesis_robert"
+
+
+# python3.11 preprocessing\resampling_normalization.py --input_dir "D:\thesis_robert\subset_v2_black_slices_removed" --output_dir "D:\thesis_robert\NLST_subset_v5_nifti_1_5mm_Voxel" --csv_path "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\nlst_subset_v5.csv"
 

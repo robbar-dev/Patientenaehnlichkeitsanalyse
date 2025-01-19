@@ -226,7 +226,7 @@ class TripletTrainer(nn.Module):
             total_loss += loss.item()
             steps += 1
 
-            if step % 250 == 0:
+            if step % 10 == 0:
                 logging.info(f"[Step {step}] Triplet Loss = {loss.item():.4f}")
 
         avg_loss = total_loss / steps if steps > 0 else 0.0

@@ -12,7 +12,7 @@ Das Skript baut auf den Ergebnissen der test_resampling_noramlization.py Datei a
 
 # Laden der image_statistics.csv Datei mit spezifizierter Kodierung
 image_stats = pd.read_csv(
-    r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel\validation_resampling_normalization\image_statistics.csv",
+    r"D:\thesis_robert\NLST_subset_v5_nifti_1_5mm_Voxel\validation_resampling_normalization\image_statistics.csv",
     encoding='latin1'
 )
 
@@ -78,47 +78,47 @@ for column in ['Mean_Intensity', 'Median_Intensity', 'Std_Intensity']:
     plt.show()
 
 # Speichern der Ausreißer in einer Textdatei
-if outlier_info:
-    output_file = r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel\validation_resampling_normalization\outliers_summary.txt"
-    with open(output_file, 'w') as f:
-        f.write("Liste der Ausreißer:\n")
-        for info in outlier_info:
-            f.write(info + "\n")
-    print(f"Ausreißer-Informationen gespeichert in {output_file}")
-else:
-    print("Keine Ausreißer gefunden.")
-
-"""
-# Weitere Visualisierungen
-# 1. Histogramm der Mean_Intensity
-sns.histplot(image_stats['Mean_Intensity'].dropna(), kde=True)
-plt.title('Verteilung der mittleren Intensitätswerte')
-plt.xlabel('Mittlere Intensität')
-plt.ylabel('Anzahl')
-plt.show()
-
-# 2. Histogramm der Std_Intensity
-sns.histplot(image_stats['Std_Intensity'].dropna(), kde=True)
-plt.title('Verteilung der Standardabweichung der Intensitätswerte')
-plt.xlabel('Standardabweichung der Intensität')
-plt.ylabel('Anzahl')
-plt.show()
-
-# 3. Histogramm der Image_Shape_X
-sns.histplot(image_stats['Image_Shape_X'].dropna(), kde=True)
-plt.title('Verteilung der Bilddimensionen X')
-plt.xlabel('Bilddimension X (Voxel)')
-plt.ylabel('Anzahl')
-plt.show()
+# if outlier_info:
+#     output_file = r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel\validation_resampling_normalization\outliers_summary.txt"
+#     with open(output_file, 'w') as f:
+#         f.write("Liste der Ausreißer:\n")
+#         for info in outlier_info:
+#             f.write(info + "\n")
+#     print(f"Ausreißer-Informationen gespeichert in {output_file}")
+# else:
+#     print("Keine Ausreißer gefunden.")
 
 
-# 4. Histogramm der Physical_Size_X
-sns.histplot(image_stats['Physical_Size_X'].dropna(), kde=True)
-plt.title('Verteilung der physischen Größe X')
-plt.xlabel('Physische Größe X (mm)')
-plt.ylabel('Anzahl')
-plt.show()
-"""
+# # Weitere Visualisierungen
+# # 1. Histogramm der Mean_Intensity
+# sns.histplot(image_stats['Mean_Intensity'].dropna(), kde=True)
+# plt.title('Verteilung der mittleren Intensitätswerte')
+# plt.xlabel('Mittlere Intensität')
+# plt.ylabel('Anzahl')
+# plt.show()
+
+# # 2. Histogramm der Std_Intensity
+# sns.histplot(image_stats['Std_Intensity'].dropna(), kde=True)
+# plt.title('Verteilung der Standardabweichung der Intensitätswerte')
+# plt.xlabel('Standardabweichung der Intensität')
+# plt.ylabel('Anzahl')
+# plt.show()
+
+# # 3. Histogramm der Image_Shape_X
+# sns.histplot(image_stats['Image_Shape_X'].dropna(), kde=True)
+# plt.title('Verteilung der Bilddimensionen X')
+# plt.xlabel('Bilddimension X (Voxel)')
+# plt.ylabel('Anzahl')
+# plt.show()
+
+
+# # 4. Histogramm der Physical_Size_X
+# sns.histplot(image_stats['Physical_Size_X'].dropna(), kde=True)
+# plt.title('Verteilung der physischen Größe X')
+# plt.xlabel('Physische Größe X (mm)')
+# plt.ylabel('Anzahl')
+# plt.show()
+
 
 # 5. Scatterplot: Bilddimensionen vs. Physische Größe
 plt.figure(figsize=(10, 6))

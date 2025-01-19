@@ -2,7 +2,6 @@ import os
 import sys
 import torch
 import matplotlib.pyplot as plt
-import pandas as pd
 import random
 from torch.utils.data import DataLoader
 
@@ -11,15 +10,12 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# funktioniert erst nach Hauptprojektverzeichnis
-from training.data_loader import LungCTIterableDataset, collate_fn
+# Importiere den neuen DataLoader
+from training.data_loader import SinglePatientDataset
 
 def test_data_loading(dataset):
-    print("\nÜberprüfung der geladenen Daten:")
-    for i, row in dataset.df.iterrows():
-        print(f"Patient ID: {row['pid']}, Study Year: {row['study_yr']}, Combination: {row['combination']}")
-        if i == 10:  # Zeige nur die ersten 10 Patienten
-            break
+    print("\nÜberprüfung der geladenen Patches:")
+    print(f"Anzahl der Patches: {len(dataset)}")
 
 def visualize_patches_for_slices(patches, pid, study_yr):
     """
@@ -28,7 +24,7 @@ def visualize_patches_for_slices(patches, pid, study_yr):
     print(f"\nVisualisiere Patches von Patient ID: {pid}, Study Year: {study_yr}")
     num_patches = patches.shape[0]  # Gesamtanzahl der Patches
     plt.figure(figsize=(15, 5))
-    
+
     for idx in range(num_patches):
         patch = patches[idx]
         for slice_idx in range(patch.shape[0]):  # 3 Slices (Channels)
@@ -41,18 +37,16 @@ def visualize_patches_for_slices(patches, pid, study_yr):
     plt.tight_layout()
     plt.show()
 
-def test_visualize_all_patches(loader):
+def test_visualize_all_patches(loader, pid, study_yr):
     print("\nVisualisiere alle Patches für die ersten Patienten:")
-    for imgs, labels, pids, study_yrs in loader:
-        for i in range(imgs.shape[0]):
-            visualize_patches_for_slices(imgs[i:i+1], pids[i], study_yrs[i])
+    for patches in loader:
+        visualize_patches_for_slices(patches, pid, study_yr)
         break  # Beende nach dem ersten Batch
 
 def test_loader_performance(loader):
     print("\nTeste Batchgrößen und Ladezeiten:")
-    for imgs, labels, pids, study_yrs in loader:
-        print(f"Batch Size: {imgs.shape[0]}, Images shape: {imgs.shape}")
-        print(f"Labels shape: {labels.shape}, PIDs: {pids}, Study Years: {study_yrs}")
+    for patches in loader:
+        print(f"Batch Size: {patches.shape[0]}, Patches shape: {patches.shape}")
         break
 
 def test_training_loop(loader, device):
@@ -77,12 +71,12 @@ def test_training_loop(loader, device):
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.BCEWithLogitsLoss()
 
-    for imgs, labels, pids, study_yrs in loader:
-        imgs = imgs.to(device)
-        labels = labels.to(device)
+    for patches in loader:
+        patches = patches.to(device)
 
         optimizer.zero_grad()
-        outputs = model(imgs)
+        outputs = model(patches)
+        labels = torch.zeros(outputs.shape).to(device)  # Dummy-Labels
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
@@ -91,47 +85,31 @@ def test_training_loop(loader, device):
         break
 
 if __name__ == "__main__":
-    data_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V4\nlst_subset_v4.csv"
-    data_root = r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel"
-    
-    # Lade die CSV-Datei in einen DataFrame
-    df = pd.read_csv(data_csv)
-    
-    # Anzahl der zufällig auszuwählenden Patienten
-    num_random_patients = 10
-    
-    # Wähle zufällige Patienten aus
-    random_pids = random.sample(list(df['pid']), num_random_patients)
-    print(f"Zufällig ausgewählte Patient IDs: {random_pids}")
-    
-    # Filtere den DataFrame basierend auf den ausgewählten PIDs
-    filtered_df = df[df['pid'].isin(random_pids)]
-    
-    # Speichere den gefilterten DataFrame in einer temporären CSV-Datei
-    filtered_csv = "filtered_data.csv"
-    filtered_df.to_csv(filtered_csv, index=False)
-    
-    # Initialisiere das Dataset mit der gefilterten CSV
-    dataset = LungCTIterableDataset(
-        data_csv=filtered_csv,
+    data_root = r"D:\thesis_robert\NLST_subset_v5_nifti_1_5mm_Voxel"
+    pid = 216500
+    study_yr = 0
+
+    # Initialisiere das Dataset mit dem neuen Dataloader
+    dataset = SinglePatientDataset(
         data_root=data_root,
-        roi_size=(96,96,3),
-        overlap=(10,10,1),
+        pid=pid,
+        study_yr=study_yr,
+        roi_size=(128, 128, 3),
+        overlap=(16, 16, 1),
     )
-    
+
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     loader = DataLoader(
         dataset,
-        batch_size=10,
+        batch_size=6,
         shuffle=False,  # Shuffle entfernt, da nicht erlaubt mit IterableDataset
         num_workers=4,
         pin_memory=True,
-        collate_fn=collate_fn
     )
 
     # Teste die verschiedenen Funktionen
     test_data_loading(dataset)
-    test_visualize_all_patches(loader)
+    test_visualize_all_patches(loader, pid, study_yr)
     test_loader_performance(loader)
     test_training_loop(loader, device)

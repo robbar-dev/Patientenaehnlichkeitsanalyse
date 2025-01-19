@@ -17,9 +17,9 @@ def analyze_images(input_dir, output_dir, sample_size):
         os.makedirs(output_dir)
     
     # Verzeichnis für Histogramme erstellen
-    histogram_dir = os.path.join(output_dir, "histograms")
-    if not os.path.exists(histogram_dir):
-        os.makedirs(histogram_dir)
+    # histogram_dir = os.path.join(output_dir, "histograms")
+    # if not os.path.exists(histogram_dir):
+    #     os.makedirs(histogram_dir)
     
     # CSV-Dateien zum Speichern der Ergebnisse öffnen
     stats_file = os.path.join(output_dir, "image_statistics.csv")
@@ -113,24 +113,24 @@ def analyze_images(input_dir, output_dir, sample_size):
             })
             
             # Histogramm erstellen und speichern
-            plt.figure(figsize=(6, 4))
-            plt.hist(data.flatten(), bins=100, color='blue', alpha=0.7)
-            plt.title(f'Intensitätshistogramm: {file}')
-            plt.xlabel('Intensität')
-            plt.ylabel('Häufigkeit')
+            # plt.figure(figsize=(6, 4))
+            # plt.hist(data.flatten(), bins=100, color='blue', alpha=0.7)
+            # plt.title(f'Intensitätshistogramm: {file}')
+            # plt.xlabel('Intensität')
+            # plt.ylabel('Häufigkeit')
             
-            histogram_path = os.path.join(histogram_dir, f"{os.path.splitext(file)[0]}_histogram.png")
-            plt.savefig(histogram_path)
-            plt.close()
-            print(f"Histogram gespeichert unter {histogram_path}")
+            # histogram_path = os.path.join(histogram_dir, f"{os.path.splitext(file)[0]}_histogram.png")
+            # plt.savefig(histogram_path)
+            # plt.close()
+            # print(f"Histogram gespeichert unter {histogram_path}")
     
     print("\nAnalyse abgeschlossen.")
     print(f"Statistiken gespeichert in {stats_file}")
     print(f"Metadatenvergleich gespeichert in {metadata_comparison_file}")
 
 def main():
-    input_dir = r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel"
-    output_dir = r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel\validation_resampling_normalization"
+    input_dir = r"D:\thesis_robert\NLST_subset_v5_nifti_1_5mm_Voxel"
+    output_dir = r"D:\thesis_robert\NLST_subset_v5_nifti_1_5mm_Voxel\validation_resampling_normalization"
     sample_size = 1178  # Stichprobengröße
 
     analyze_images(input_dir, output_dir, sample_size)
