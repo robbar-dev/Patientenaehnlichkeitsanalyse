@@ -20,6 +20,23 @@ def load_nifti_volume(filepath):
     volume = img.get_fdata()
     return volume
 
+def find_matching_file(data_root, pid, study_yr):
+    """
+    Sucht eine Datei, die mit .nii.gz endet und die PID und Study Year enthält.
+
+    Args:
+        data_root (str): Wurzelverzeichnis der Dateien
+        pid (str): Patient ID
+        study_yr (str): Study Year
+
+    Returns:
+        str: Pfad zur gefundenen Datei oder None
+    """
+    for file in os.listdir(data_root):
+        if file.endswith(".nii.gz") and f"pid_{pid}_study_yr_{study_yr}" in file:
+            return os.path.join(data_root, file)
+    return None
+
 def visualize_series(df, data_root, num_patients):
     """
     Visualisiert verschiedene Klassen von NIfTI-Volumes interaktiv.
@@ -41,8 +58,8 @@ def visualize_series(df, data_root, num_patients):
         for _, row in patient_rows.iterrows():
             pid = row['pid']
             study_yr = row['study_yr']
-            nifti_path = os.path.join(data_root, f"pid_{pid}_study_yr_{study_yr}.nii.gz.nii.gz")
-            if os.path.exists(nifti_path):
+            nifti_path = find_matching_file(data_root, pid, study_yr)
+            if nifti_path:
                 volume = load_nifti_volume(nifti_path)
                 patient_volumes.append(volume)
                 patient_metadata.append((pid, study_yr))
@@ -111,4 +128,4 @@ if __name__ == "__main__":
     main()
 
 
-# python3.11 utils\test_model\visualization_series.py --csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\classification_test\nlst_subset_v5_2classes.csv" --data_root "D:\thesis_robert\NLST_subset_v5_nifti_1_5mm_Voxel" --num_patients 4
+# python3.11 utils\test_model\visualization_series.py --csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\classification_test\nlst_subset_v5_2classes.csv" --data_root "D:\thesis_robert\NLST_subset_v5_nifti_3mm_Voxel" --num_patients 4
