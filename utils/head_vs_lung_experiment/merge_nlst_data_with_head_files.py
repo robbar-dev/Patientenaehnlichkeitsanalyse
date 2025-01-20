@@ -89,7 +89,7 @@ def main():
         print(f"Kopiert: {source_path} => {dest_path}")
 
         # Head=0, Lung=1 => => "1"
-        writer.writerow([pid, study_yr, "1"])
+        writer.writerow([pid, study_yr, "0-0-1"])
 
         total_copied += 1
 

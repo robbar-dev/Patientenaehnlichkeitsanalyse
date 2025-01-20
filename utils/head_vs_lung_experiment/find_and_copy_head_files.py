@@ -90,7 +90,7 @@ def main():
 
         # 5) CSV-Eintrag => "HNCHUM","001","0"
         #    combination=0 (wie gefordert)
-        writer.writerow([pid, study, "0"])
+        writer.writerow([pid, study, "0-0-2"])
         total_copied += 1
 
     csv_file.close()

@@ -1,0 +1,4 @@
+ExpName;Epochs;NumTriplets;LR;Aggregator;Margin;Dropout;WeightDecay;UseScheduler;FreezeBlocks;BestValMAP;BestEpoch;Timestamp
+MMM_Exp17_max;15;350;1e-05;max;1.0;0.2;0.0001;False;[0, 1];0.9846407888721139;1;2025-01-20_20-20-13
+MMM_Exp18_mean;15;350;1e-05;mean;1.0;0.2;0.0001;False;[0, 1];0.9908304317762241;1;2025-01-20_20-33-05
+MMM_Exp19_mil;15;350;1e-05;mil;1.0;0.2;0.0001;False;[0, 1];0.9999157745002621;3;2025-01-20_20-46-04
