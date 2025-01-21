@@ -74,62 +74,81 @@ def main():
     # Liste von Experiment-Konfigurationen
     experiments = [
       {
-        "exp_name": "MMM_Exp10_max",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
-
-        "aggregator_name": "max",
-        "epochs": 30,
-        "num_triplets": 1000,
-        "lr": 1e-5,
-        "margin": 1.0,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": False, 
-        "freeze_blocks": [0,1]
-      },
-      {
-        "exp_name": "MMM_Exp11_mean",
+        "exp_name": "MMM_Exp20_mean",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
 
         "aggregator_name": "mean",
-        "epochs": 30,
+        "epochs": 40,
         "num_triplets": 1000,
-        "lr": 1e-5,
-        "margin": 1.0,
+        "lr": 1e-3,
+        "margin": 1.3,
         "roi_size": (96,96,3),
         "overlap": (10,10,1),
         "attention_hidden_dim": 128,
         "dropout": 0.2,
         "weight_decay": 1e-4,
-        "use_scheduler": False,
+        "use_scheduler": True, 
         "freeze_blocks": [0,1]
-      }, 
+      },
       {
-        "exp_name": "MMM_Exp12_mil",
+        "exp_name": "MMM_Exp21_mil",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
 
         "aggregator_name": "mil",
-        "epochs": 30,
+        "epochs": 40,
         "num_triplets": 1000,
-        "lr": 1e-5,
-        "margin": 1.0,
+        "lr": 1e-3,
+        "margin": 1.3,
         "roi_size": (96,96,3),
         "overlap": (10,10,1),
         "attention_hidden_dim": 128,
         "dropout": 0.2,
         "weight_decay": 1e-4,
-        "use_scheduler": False,
+        "use_scheduler": True,
         "freeze_blocks": [0,1]
-      }      
+      }, 
+      {
+        "exp_name": "MMM_Exp20_mean",
+        "train_csv": TRAIN_CSV,
+        "val_csv":   VAL_CSV,
+        "data_root": DATA_ROOT,
+
+        "aggregator_name": "mean",
+        "epochs": 40,
+        "num_triplets": 1000,
+        "lr": 3e-4,
+        "margin": 1.5,
+        "roi_size": (96,96,3),
+        "overlap": (10,10,1),
+        "attention_hidden_dim": 128,
+        "dropout": 0.2,
+        "weight_decay": 1e-4,
+        "use_scheduler": True, 
+        "freeze_blocks": [0,1]
+      },
+      {
+        "exp_name": "MMM_Exp21_mil",
+        "train_csv": TRAIN_CSV,
+        "val_csv":   VAL_CSV,
+        "data_root": DATA_ROOT,
+
+        "aggregator_name": "mil",
+        "epochs": 40,
+        "num_triplets": 1000,
+        "lr": 3e-4,
+        "margin": 1.5,
+        "roi_size": (96,96,3),
+        "overlap": (10,10,1),
+        "attention_hidden_dim": 128,
+        "dropout": 0.2,
+        "weight_decay": 1e-4,
+        "use_scheduler": True,
+        "freeze_blocks": [0,1]
+      }
     ]
 
     # CSV-Ausgabedatei
