@@ -94,7 +94,7 @@ class TripletTrainer(nn.Module):
 
         # 1) CNN-Backbone
         self.base_cnn = BaseCNN(
-            model_name='resnet18',
+            model_name='resnet50',
             pretrained=pretrained,
             freeze_blocks=freeze_blocks
         ).to(device)
@@ -102,7 +102,7 @@ class TripletTrainer(nn.Module):
         # 2) Aggregator
         if aggregator_name == "mil":
             self.mil_agg = AttentionMILAggregator(
-                in_dim=512,
+                in_dim=2048,
                 hidden_dim=attention_hidden_dim,
                 dropout=dropout
             ).to(device)
@@ -164,14 +164,14 @@ class TripletTrainer(nn.Module):
         with torch.no_grad():
             for patch_t in loader:
                 patch_t = patch_t.to(self.device)
-                emb = self.base_cnn(patch_t)  # => (B,512)
+                emb = self.base_cnn(patch_t)  # => (B,2048)
                 all_embs.append(emb)
 
         if len(all_embs) == 0:
-            return torch.zeros((1,512), device=self.device)
+            return torch.zeros((1,2048), device=self.device)
 
-        patch_embs = torch.cat(all_embs, dim=0)  # => (N,512)
-        patient_emb = self.mil_agg(patch_embs)   # => (1,512)
+        patch_embs = torch.cat(all_embs, dim=0)  # => (N,2048)
+        patient_emb = self.mil_agg(patch_embs)   # => (1,2048)
         return patient_emb
 
     # --------------------------------------
@@ -192,14 +192,14 @@ class TripletTrainer(nn.Module):
 
         for patch_t in loader:
             patch_t = patch_t.to(self.device)
-            emb = self.base_cnn(patch_t)  # => (B,512)
+            emb = self.base_cnn(patch_t)  # => (B,2048)
             patch_embs.append(emb)
 
         if len(patch_embs) == 0:
-            return torch.zeros((1,512), device=self.device, requires_grad=True)
+            return torch.zeros((1,2048), device=self.device, requires_grad=True)
 
         patch_embs = torch.cat(patch_embs, dim=0)
-        patient_emb = self.mil_agg(patch_embs)  # => (1,512)
+        patient_emb = self.mil_agg(patch_embs)  # => (1,2048)
         return patient_emb
 
     # --------------------------------------
@@ -354,12 +354,12 @@ class TripletTrainer(nn.Module):
             study_yr = row['study_yr']
             combo = row['combination']
 
-            emb = self.compute_patient_embedding(pid, study_yr)  # => (1,512)
+            emb = self.compute_patient_embedding(pid, study_yr)  # => (1,2048)
             emb_np = emb.squeeze(0).detach().cpu().numpy()
             embeddings_list.append(emb_np)
             combos.append(combo)
 
-        embeddings_arr = np.array(embeddings_list)  # shape (N,512)
+        embeddings_arr = np.array(embeddings_list)  # shape (N,2048)
 
         if method.lower() == 'tsne':
             from sklearn.manifold import TSNE

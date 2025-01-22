@@ -16,7 +16,7 @@ class AttentionMILAggregator(nn.Module):
         normalisieren via Softmax und summieren gewichtet.
     """
 
-    def __init__(self, in_dim=512, hidden_dim=128, dropout=0.2):
+    def __init__(self, in_dim=2048, hidden_dim=128, dropout=0.2):
         """
         Args:
           in_dim: Dimension der Patch-Features (z.B. 512 für ResNet18)

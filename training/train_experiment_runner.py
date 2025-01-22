@@ -9,7 +9,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from training.trainer import TripletTrainer  # Dein Trainer
+from training.trainer import TripletTrainer
 from evaluation.metrics import evaluate_model
 from torch.optim.lr_scheduler import StepLR
 
@@ -73,36 +73,36 @@ def main():
 
     # Liste von Experiment-Konfigurationen
     experiments = [
-      {
-        "exp_name": "MMM_Exp20_mean",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
+    #   {
+    #     "exp_name": "MMM_Exp25_mean",
+    #     "train_csv": TRAIN_CSV,
+    #     "val_csv":   VAL_CSV,
+    #     "data_root": DATA_ROOT,
 
-        "aggregator_name": "mean",
-        "epochs": 40,
-        "num_triplets": 1000,
-        "lr": 1e-3,
-        "margin": 1.3,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": True, 
-        "freeze_blocks": [0,1]
-      },
+    #     "aggregator_name": "mean",
+    #     "epochs": 15,
+    #     "num_triplets": 1000,
+    #     "lr": 1e-4,
+    #     "margin": 1.0,
+    #     "roi_size": (96,96,3),
+    #     "overlap": (10,10,1),
+    #     "attention_hidden_dim": 128,
+    #     "dropout": 0.2,
+    #     "weight_decay": 1e-4,
+    #     "use_scheduler": True, 
+    #     "freeze_blocks": [0,1]
+    #   },
       {
-        "exp_name": "MMM_Exp21_mil",
+        "exp_name": "MMM_Exp26_mil",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
 
         "aggregator_name": "mil",
-        "epochs": 40,
+        "epochs": 15,
         "num_triplets": 1000,
-        "lr": 1e-3,
-        "margin": 1.3,
+        "lr": 1e-4,
+        "margin": 1.0,
         "roi_size": (96,96,3),
         "overlap": (10,10,1),
         "attention_hidden_dim": 128,
@@ -110,45 +110,45 @@ def main():
         "weight_decay": 1e-4,
         "use_scheduler": True,
         "freeze_blocks": [0,1]
-      }, 
-      {
-        "exp_name": "MMM_Exp20_mean",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
+      } 
+    #   {
+    #     "exp_name": "MMM_Exp20_mean",
+    #     "train_csv": TRAIN_CSV,
+    #     "val_csv":   VAL_CSV,
+    #     "data_root": DATA_ROOT,
 
-        "aggregator_name": "mean",
-        "epochs": 40,
-        "num_triplets": 1000,
-        "lr": 3e-4,
-        "margin": 1.5,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": True, 
-        "freeze_blocks": [0,1]
-      },
-      {
-        "exp_name": "MMM_Exp21_mil",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
+    #     "aggregator_name": "mean",
+    #     "epochs": 40,
+    #     "num_triplets": 1000,
+    #     "lr": 3e-4,
+    #     "margin": 1.5,
+    #     "roi_size": (96,96,3),
+    #     "overlap": (10,10,1),
+    #     "attention_hidden_dim": 128,
+    #     "dropout": 0.2,
+    #     "weight_decay": 1e-4,
+    #     "use_scheduler": True, 
+    #     "freeze_blocks": [0,1]
+    #   },
+    #   {
+    #     "exp_name": "MMM_Exp21_mil",
+    #     "train_csv": TRAIN_CSV,
+    #     "val_csv":   VAL_CSV,
+    #     "data_root": DATA_ROOT,
 
-        "aggregator_name": "mil",
-        "epochs": 40,
-        "num_triplets": 1000,
-        "lr": 3e-4,
-        "margin": 1.5,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": True,
-        "freeze_blocks": [0,1]
-      }
+    #     "aggregator_name": "mil",
+    #     "epochs": 40,
+    #     "num_triplets": 1000,
+    #     "lr": 3e-4,
+    #     "margin": 1.5,
+    #     "roi_size": (96,96,3),
+    #     "overlap": (10,10,1),
+    #     "attention_hidden_dim": 128,
+    #     "dropout": 0.2,
+    #     "weight_decay": 1e-4,
+    #     "use_scheduler": True,
+    #     "freeze_blocks": [0,1]
+    #   }
     ]
 
     # CSV-Ausgabedatei

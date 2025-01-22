@@ -42,7 +42,7 @@ class TripletLoss(nn.Module):
 if __name__ == "__main__":
     # Test mit Dummy-Embeddings
     batch_size = 4
-    embedding_dim = 512
+    embedding_dim = 2048
     
     # Erstellen von Dummy-Daten
     anchor = torch.randn(batch_size, embedding_dim)
