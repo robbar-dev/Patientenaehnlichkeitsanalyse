@@ -209,5 +209,5 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python3.11 preprocessing\resampling_normalization.py --input_dir "D:\thesis_robert\NLST_subset_v5_nifti_3mm_Voxel\corruptedFiles" --output_dir "D:\thesis_robert"
+# python3.11 preprocessing\resampling_normalization.py --input_dir "D:\thesis_robert\subset_v5_seg" --output_dir "D:\thesis_robert\NLST_subset_v5_seg_nifti_2mm_Voxel"
 

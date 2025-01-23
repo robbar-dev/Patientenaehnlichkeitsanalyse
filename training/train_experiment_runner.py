@@ -69,20 +69,20 @@ def main():
     # Pfade definieren:
     TRAIN_CSV = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv"
     VAL_CSV   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\validation\nlst_subset_v5_validation.csv"
-    DATA_ROOT = r"D:\thesis_robert\NLST_subset_v5_nifti_3mm_Voxel"
+    DATA_ROOT = r"D:\thesis_robert\NLST_subset_v5_seg_nifti_3mm_Voxel"
 
     # Liste von Experiment-Konfigurationen
     experiments = [
       {
-        "exp_name": "MMM_Exp10_max",
+        "exp_name": "MMM_Exp27_mil_seg",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
 
-        "aggregator_name": "max",
-        "epochs": 30,
+        "aggregator_name": "mil",
+        "epochs": 20,
         "num_triplets": 1000,
-        "lr": 1e-5,
+        "lr": 1e-4,
         "margin": 1.0,
         "roi_size": (96,96,3),
         "overlap": (10,10,1),
@@ -93,13 +93,13 @@ def main():
         "freeze_blocks": [0,1]
       },
       {
-        "exp_name": "MMM_Exp11_mean",
+        "exp_name": "MMM_Exp27_mean_seg",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
 
         "aggregator_name": "mean",
-        "epochs": 30,
+        "epochs": 20,
         "num_triplets": 1000,
         "lr": 1e-5,
         "margin": 1.0,
@@ -111,25 +111,25 @@ def main():
         "use_scheduler": False,
         "freeze_blocks": [0,1]
       }, 
-      {
-        "exp_name": "MMM_Exp12_mil",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
+    #   {
+    #     "exp_name": "MMM_Exp12_mil",
+    #     "train_csv": TRAIN_CSV,
+    #     "val_csv":   VAL_CSV,
+    #     "data_root": DATA_ROOT,
 
-        "aggregator_name": "mil",
-        "epochs": 30,
-        "num_triplets": 1000,
-        "lr": 1e-5,
-        "margin": 1.0,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": False,
-        "freeze_blocks": [0,1]
-      }      
+    #     "aggregator_name": "mil",
+    #     "epochs": 30,
+    #     "num_triplets": 1000,
+    #     "lr": 1e-5,
+    #     "margin": 1.0,
+    #     "roi_size": (96,96,3),
+    #     "overlap": (10,10,1),
+    #     "attention_hidden_dim": 128,
+    #     "dropout": 0.2,
+    #     "weight_decay": 1e-4,
+    #     "use_scheduler": False,
+    #     "freeze_blocks": [0,1]
+    #   }      
     ]
 
     # CSV-Ausgabedatei

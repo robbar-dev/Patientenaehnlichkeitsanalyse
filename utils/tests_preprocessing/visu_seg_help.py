@@ -1,10 +1,12 @@
 import os
-import argparse
 import nibabel as nib
-import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 import random
+
+# Konfiguration
+DATA_PATH = r"D:\thesis_robert\NLST_subset_v5_seg_nifti_3mm_Voxel"
+SAMPLE_SIZE = 20  
 
 def load_nifti_volume(filepath):
     """
@@ -20,80 +22,65 @@ def load_nifti_volume(filepath):
     volume = img.get_fdata()
     return volume
 
-def visualize_sample(nifti_files, sample_size):
+def visualize_sampled_nifti_series(data_path, sample_size):
     """
-    Visualisiert eine Stichprobe von NIfTI-Dateien mit bis zu 2 Serien pro Fenster.
+    Visualisiert eine Stichprobe von NIfTI-Serien in einem Verzeichnis.
 
     Args:
-        nifti_files (list): Liste der Pfade zu NIfTI-Dateien.
-        sample_size (int): Anzahl der zu visualisierenden Stichproben.
+        data_path (str): Pfad zum Verzeichnis der NIfTI-Dateien.
+        sample_size (int): Anzahl der zu visualisierenden zufälligen Serien.
+
+    Returns:
+        None
     """
+    # Alle NIfTI-Dateien im Verzeichnis auflisten
+    nifti_files = [f for f in os.listdir(data_path) if f.endswith(".nii.gz")]
+
+    if len(nifti_files) == 0:
+        print("Keine NIfTI-Dateien im Verzeichnis gefunden.")
+        return
+
     if sample_size > len(nifti_files):
-        print("Warnung: Stichprobe größer als Anzahl der verfügbaren Dateien. Reduziere Stichprobengröße.")
+        print("Warnung: Stichprobengröße ist größer als die Anzahl der verfügbaren Dateien.")
         sample_size = len(nifti_files)
 
     # Zufällige Auswahl von Dateien
     sampled_files = random.sample(nifti_files, sample_size)
 
-    current_idx = 0
-    total_files = len(sampled_files)
+    for file_name in sampled_files:
+        file_path = os.path.join(data_path, file_name)
+        print(f"Lade Datei: {file_path}")
 
-    while current_idx < total_files:
-        fig, axes = plt.subplots(2, 1, figsize=(12, 8))
-        fig.subplots_adjust(hspace=0.3)
-
-        sliders = []
-        displayed_images = []
-
-        for i in range(2):
-            if current_idx >= total_files:
-                axes[i].axis("off")
-                continue
-
-            file_path = sampled_files[current_idx]
+        try:
+            # NIfTI-Datei laden
             volume = load_nifti_volume(file_path)
 
-            ax = axes[i]
-            img = ax.imshow(volume[:, :, 0], cmap="gray")
-            ax.set_title(f"{os.path.basename(file_path)}", fontsize=10)
-            ax.axis("off")
+            # Initiales Setup
+            fig, ax = plt.subplots()
+            plt.subplots_adjust(bottom=0.25)
+            img_plot = ax.imshow(volume[:, :, 0], cmap="gray")
+            ax.set_title(f"{file_name} - Slice 0")
 
-            slider_ax = fig.add_axes([0.15, 0.48 - i * 0.48, 0.7, 0.03])
-            slider = Slider(slider_ax, f"Slice {i+1}", 0, volume.shape[2] - 1, valinit=0, valstep=1)
+            # Slider hinzufügen
+            ax_slider = plt.axes([0.2, 0.1, 0.6, 0.03])
+            slider = Slider(ax_slider, "Slice", 0, volume.shape[2] - 1, valinit=0, valstep=1)
 
-            sliders.append((slider, img, volume))
-            displayed_images.append((img, volume))
-            current_idx += 1
-
-        def update(val):
-            for slider, img, volume in sliders:
+            def update(val):
                 slice_idx = int(slider.val)
-                img.set_data(volume[:, :, slice_idx])
-            fig.canvas.draw_idle()
+                img_plot.set_data(volume[:, :, slice_idx])
+                ax.set_title(f"{file_name} - Slice {slice_idx}")
+                fig.canvas.draw_idle()
 
-        for slider, _, _ in sliders:
             slider.on_changed(update)
 
-        plt.tight_layout()
-        plt.show()
+            plt.show()
 
-def main():
-    parser = argparse.ArgumentParser(description="Visualisierung von NIfTI-Stichproben.")
-    parser.add_argument("--data_root", required=True, help="Pfad zum Verzeichnis der NIfTI-Dateien.")
-    parser.add_argument("--sample_size", type=int, default=4, help="Anzahl der zu visualisierenden Stichproben.")
-    args = parser.parse_args()
-
-    # Alle NIfTI-Dateien im Verzeichnis finden
-    nifti_files = [os.path.join(args.data_root, f) for f in os.listdir(args.data_root) if f.endswith(".nii.gz")]
-
-    if not nifti_files:
-        print("Keine NIfTI-Dateien im angegebenen Verzeichnis gefunden.")
-        return
-
-    visualize_sample(nifti_files, args.sample_size)
+        except Exception as e:
+            print(f"Fehler beim Laden oder Visualisieren von {file_name}: {e}")
 
 if __name__ == "__main__":
-    main()
+    visualize_sampled_nifti_series(DATA_PATH, SAMPLE_SIZE)
 
 
-# python3.11 utils\tests_preprocessing\visu_seg_help.py --data_root "D:\thesis_robert\Segmentation_Test\V2_unverarbeitet_Data\testdata_v2_unverarbeitet_seg" --sample_size 10
+
+# python3.11 utils\tests_preprocessing\visu_seg_help.py --data_root "D:\thesis_robert\xx_test" --sample_size 10
