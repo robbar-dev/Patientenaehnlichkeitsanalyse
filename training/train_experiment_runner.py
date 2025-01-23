@@ -69,7 +69,7 @@ def main():
     # Pfade definieren:
     TRAIN_CSV = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv"
     VAL_CSV   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\validation\nlst_subset_v5_validation.csv"
-    DATA_ROOT = r"D:\thesis_robert\NLST_subset_v5_seg_nifti_3mm_Voxel"
+    DATA_ROOT = r"D:\thesis_robert\NLST_subset_v5_seg_nifti_1_5mm_Voxel_without_black_slices"
 
     # Liste von Experiment-Konfigurationen
     experiments = [

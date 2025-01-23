@@ -5,8 +5,8 @@ from matplotlib.widgets import Slider
 import random
 
 # Konfiguration
-DATA_PATH = r"D:\thesis_robert\NLST_subset_v5_seg_nifti_3mm_Voxel"
-SAMPLE_SIZE = 20  
+DATA_PATH = r"D:\thesis_robert\NLST_subset_v5_seg_nifti_1_5mm_Voxel"
+SAMPLE_SIZE = 5 
 
 def load_nifti_volume(filepath):
     """
@@ -54,11 +54,17 @@ def visualize_sampled_nifti_series(data_path, sample_size):
         try:
             # NIfTI-Datei laden
             volume = load_nifti_volume(file_path)
+            print("Shape:", volume.shape, "Min:", volume.min(), "Max:", volume.max())
 
             # Initiales Setup
             fig, ax = plt.subplots()
             plt.subplots_adjust(bottom=0.25)
-            img_plot = ax.imshow(volume[:, :, 0], cmap="gray")
+            img_plot = ax.imshow(volume[:, :, 0].T,
+                     cmap="gray",
+                     origin="lower",
+                     vmin=0,
+                     vmax=1)
+
             ax.set_title(f"{file_name} - Slice 0")
 
             # Slider hinzufügen
@@ -67,7 +73,8 @@ def visualize_sampled_nifti_series(data_path, sample_size):
 
             def update(val):
                 slice_idx = int(slider.val)
-                img_plot.set_data(volume[:, :, slice_idx])
+                slice_data = volume[:, :, slice_idx].T
+                img_plot.set_data(slice_data)
                 ax.set_title(f"{file_name} - Slice {slice_idx}")
                 fig.canvas.draw_idle()
 
