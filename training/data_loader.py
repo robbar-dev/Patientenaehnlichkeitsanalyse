@@ -8,24 +8,25 @@ import torch.utils.data as data
 def rearrange_channels_torch(patch_t):
     """
     patch_t shape: (1, H, W, D)
-    Falls D == 3, wandeln wir das in (3, H, W) um.
+    Falls D == 3, wandeln wir das in (3, H, W).
+
+    -> (1,H,W,3) => remove channel=1 => (H,W,3) => permute(2,0,1) => (3,H,W)
     """
     C, H, W, D = patch_t.shape
     if D == 3:
-        # (1,H,W,3) => (3,H,W)
-        patch_t = patch_t.squeeze(0)
-        patch_t = patch_t.permute(2, 0, 1)
+        patch_t = patch_t.squeeze(0)      # (H,W,3)
+        patch_t = patch_t.permute(2,0,1)  # (3,H,W)
     return patch_t
 
 class SinglePatientDataset(data.Dataset):
     """
-    Lädt ALLE Patches für genau einen Patienten (pid, study_yr).
-    1) NIfTI laden
-    2) Slices skippen => volume_np[..., ::2]
-    3) grid_split => Patch-Extraktion
-    4) (1,H,W,D) -> (3,H,W) falls D=3
-    5) Optional: Filtern leerer Patches
-    6) Im __getitem__ => Min-Max Normalisierung
+    Ein Dataset, das aus EINEM NIfTI (pid, study_yr) 3D-Volume alle Patches extrahiert.
+    Schritte:
+     1) NIfTI laden
+     2) Optional: Slices skippen (e.g. volume[..., ::2])
+     3) Patches via grid_split
+     4) Optional: Filtern von Patches, die (fast) leer sind
+     5) Im __getitem__ -> rearrange => (3,H,W) + minmax-normalisierung
     """
 
     def __init__(
@@ -33,20 +34,26 @@ class SinglePatientDataset(data.Dataset):
         data_root,
         pid,
         study_yr,
-        roi_size=(96, 96, 3),
-        overlap=(10, 10, 1),
+        roi_size=(96,96,3),
+        overlap=(10,10,1),
+        skip_slices=False,
+        skip_factor=2,
         filter_empty_patches=True,
-        min_nonzero_fraction=0.01
+        min_nonzero_fraction=0.01,
+        do_patch_minmax=True
     ):
         """
         Args:
-            data_root (str): Pfad zum Verzeichnis mit den .nii.gz Dateien
+            data_root (str): Pfad zum Ordner mit .nii.gz
             pid (str): Patienten-ID
-            study_yr (str): Jahr
+            study_yr (str): Study-Year
             roi_size (tuple): z.B. (96,96,3)
-            overlap (tuple): Overlap (H,W,D)
-            filter_empty_patches (bool): Wenn True => wir filtern Patches ohne Variation
-            min_nonzero_fraction (float): z.B. 0.01 => Mind. 1% Non-Zero, sonst Patch skip
+            overlap (tuple): (10,10,1)
+            skip_slices (bool): ob wir volume[..., ::skip_factor] machen
+            skip_factor (int): standard=2 => jede 2. Slice
+            filter_empty_patches (bool): ob wir Patches, die ~leer sind, verwerfen
+            min_nonzero_fraction (float): z.B. 0.01 => mind. 1% Non-Zero im Patch
+            do_patch_minmax (bool): ob wir pro Patch min–max normalisieren
         """
         super().__init__()
         self.data_root = data_root
@@ -55,8 +62,11 @@ class SinglePatientDataset(data.Dataset):
         self.roi_size = roi_size
         self.overlap = overlap
 
+        self.skip_slices = skip_slices
+        self.skip_factor = skip_factor
         self.filter_empty_patches = filter_empty_patches
         self.min_nonzero_fraction = min_nonzero_fraction
+        self.do_patch_minmax = do_patch_minmax
 
         # Pfad zur .nii.gz
         self.nii_path = os.path.join(
@@ -68,46 +78,56 @@ class SinglePatientDataset(data.Dataset):
             self.prepare_patches()
 
     def prepare_patches(self):
-        # 1) NIfTI laden => (H,W,D)
+        # (1) NIfTI laden => shape (H,W,D) i.d.R.
         img = nib.load(self.nii_path)
-        volume_np = img.get_fdata()  # float64 => HU oder [0..1] ...
-        volume_np = np.expand_dims(volume_np, axis=0)  # => (1,H,W,D)
+        volume_np = img.get_fdata()  # float64
+        # => (H,W,D)
 
-        # 2) skip slices => volume_np[..., ::2]
-        volume_np = volume_np[..., ::2]
+        # => expand zu (1,H,W,D)
+        volume_np = np.expand_dims(volume_np, axis=0)
 
-        volume_t = torch.from_numpy(volume_np).float()  # => (1,H,W,D)
+        # (2) optional slice skip
+        if self.skip_slices and self.skip_factor>1:
+            volume_np = volume_np[..., ::self.skip_factor]
 
-        # 3) grid_split => Liste von (1,H,W,D)-Tensors
-        all_patches = self.grid_split(volume_t, self.roi_size, self.overlap)
+        volume_t = torch.from_numpy(volume_np).float()  # => (1,H,W, D//skip_factor)
 
-        # 4) (Optional) Filtern leerer/nahezu leerer Patches
+        # (3) grid_split => Patches
+        patch_list = self.grid_split(volume_t, self.roi_size, self.overlap)
+
+        # (4) optional: Filter leerer Patches
         if self.filter_empty_patches:
-            filtered = []
-            for p in all_patches:
-                # z.B. check fraction of non-zero
-                nonzero_frac = (p > 0).float().mean().item()
-                if nonzero_frac >= self.min_nonzero_fraction:
-                    filtered.append(p)
-            self.patches = filtered
+            final_list = []
+            for p in patch_list:
+                # fraction of nonzero
+                frac = (p>1e-7).float().mean().item()
+                if frac >= self.min_nonzero_fraction:
+                    final_list.append(p)
+            self.patches = final_list
         else:
-            self.patches = all_patches
+            self.patches = patch_list
 
     def grid_split(self, volume_t, roi_size, overlap):
         """
-        Zerlege das Volume in 3D-Patches mit Overlap.
-        volume_t shape: (1,H,W,D)
+        Zerlegt (1,H,W,D) in 3D-Patches mit Overlap.
         """
         if volume_t.ndim == 3:
-            volume_t = volume_t.unsqueeze(0)
+            volume_t = volume_t.unsqueeze(0)  # => (1,H,W,D)
+
         C, H, W, D = volume_t.shape
-        stride = [roi_size[i] - overlap[i] for i in range(3)]
+        # stride = [roi_size[i]-overlap[i] for i in range(3)]
+        stride = [
+            roi_size[0] - overlap[0],
+            roi_size[1] - overlap[1],
+            roi_size[2] - overlap[2]
+        ]
 
         def get_positions(size, patch_size, step):
             positions = list(range(0, size - patch_size + 1, step))
-            if positions and (positions[-1] + patch_size < size):
+            if positions and (positions[-1]+patch_size < size):
                 positions.append(size - patch_size)
             elif not positions:
+                # wenn gar nix passt => Position=0
                 positions = [0]
             return positions
 
@@ -115,7 +135,7 @@ class SinglePatientDataset(data.Dataset):
         xs = get_positions(W, roi_size[1], stride[1])
         zs = get_positions(D, roi_size[2], stride[2])
 
-        patch_list = []
+        patches_out = []
         for z in zs:
             for y in ys:
                 for x in xs:
@@ -125,41 +145,40 @@ class SinglePatientDataset(data.Dataset):
                         x:x+roi_size[1],
                         z:z+roi_size[2]
                     ]
-                    # Padding falls Patch kleiner als roi_size
+                    # padding
                     pad_h = roi_size[0] - patch.shape[1]
                     pad_w = roi_size[1] - patch.shape[2]
                     pad_d = roi_size[2] - patch.shape[3]
-                    if pad_h>0 or pad_w>0 or pad_d>0:
+                    if (pad_h>0 or pad_w>0 or pad_d>0):
                         patch = F.pad(
                             patch,
-                            (0, pad_d, 0, pad_w, 0, pad_h),  # (D_before,D_after,W_before,W_after,H_before,H_after)
+                            (0,pad_d, 0,pad_w, 0,pad_h),
                             mode='constant', value=0
                         )
-                    patch_list.append(patch)
-        return patch_list
+                    patches_out.append(patch)
+        return patches_out
 
     def __len__(self):
         return len(self.patches)
 
     def __getitem__(self, idx):
         """
-        Holt den idx-ten Patch => (1,H,W,D)
-        => rearrange_channels_torch => (D,H,W) oder (3,H,W)
-        => min-max-normalisierung
-        => return
+        1) hole self.patches[idx] => (1,H,W,D)
+        2) rearrange => (3,H,W) wenn D=3
+        3) optional min-max => [0..1]
         """
-        patch_t = self.patches[idx]  # (1,H,W,D)
+        patch_t = self.patches[idx]  # shape (1,H,W,D)
         # => (3,H,W) falls D=3
         patch_t = rearrange_channels_torch(patch_t)
 
-        # => min-max normalisieren
-        p_min = patch_t.min()
-        p_max = patch_t.max()
-        rng = p_max - p_min
-        if rng > 1e-7:
-            patch_t = (patch_t - p_min) / rng
-        else:
-            # alles gleich => setze patch auf 0
-            patch_t.zero_()
+        # (3) optional: pro-Patch min–max normalisierung
+        if self.do_patch_minmax:
+            p_min = patch_t.min()
+            p_max = patch_t.max()
+            rng = p_max - p_min
+            if rng>1e-7:
+                patch_t = (patch_t - p_min)/rng
+            else:
+                patch_t.zero_()
 
         return patch_t
