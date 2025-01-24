@@ -39,7 +39,11 @@ def run_experiment(cfg):
         attention_hidden_dim=cfg["attention_hidden_dim"],
         dropout=cfg["dropout"],
         weight_decay=cfg["weight_decay"], 
-        freeze_blocks=cfg["freeze_blocks"]
+        freeze_blocks=cfg["freeze_blocks"], 
+        skip_slices=cfg["skip_slices"],
+        skip_factor=cfg["skip_factor"],
+        filter_empty_patches=cfg["filter_empty_patches"],
+        filter_uniform_patches=cfg["filter_uniform_patches"],
     )
 
     # Optional: Scheduler
@@ -67,14 +71,16 @@ def main():
     #logging.basicConfig(level=logging.DEBUG)
     logging.basicConfig(level=logging.INFO)
 
+    # Matplot lib logger ausschalten
+    matplotlib_logger = logging.getLogger('matplotlib')
+    matplotlib_logger.setLevel(logging.WARNING)
+
     # Pfade definieren:
     TRAIN_CSV = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv"
     VAL_CSV   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\validation\nlst_subset_v5_validation.csv"
-    DATA_ROOT = r"D:\thesis_robert\NLST_subset_v5_SEG_NORM_nifti_1_5mm_Voxel"
+    DATA_ROOT = r"D:\thesis_robert\NLST_subset_v5_SEG_NORM_nifti_1_5mm_Voxel_cropped"
 
     # Liste von Experiment-Konfigurationen
-
-    # trainer 
     experiments = [
       {
         "exp_name": "MMM_Exp27_mil_seg",
@@ -83,7 +89,7 @@ def main():
         "data_root": DATA_ROOT,
 
         "aggregator_name": "mil",
-        "epochs": 20,
+        "epochs": 15,
         "num_triplets": 1000,
         "lr": 1e-4,
         "margin": 1.0,
@@ -95,16 +101,18 @@ def main():
         "use_scheduler": False, 
         "freeze_blocks": [0,1],
         "skip_slices": True,
-        "filter_empty_patches": True
+        "skip_factor": 3,
+        "filter_empty_patches": False, 
+        "filter_uniform_patches": True,
       },
       {
-        "exp_name": "MMM_Exp27_mean_seg",
+        "exp_name": "MMM_Exp28_mean_seg",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
 
         "aggregator_name": "mean",
-        "epochs": 20,
+        "epochs": 15,
         "num_triplets": 1000,
         "lr": 1e-4,
         "margin": 1.0,
@@ -112,10 +120,33 @@ def main():
         "overlap": (10,10,1),
         "attention_hidden_dim": 128,
         "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": False,
-        "freeze_blocks": [0,1]
-      }, 
+        "weight_decay": 1e-8,
+        "use_scheduler": False, 
+        "freeze_blocks": [0,1],
+        "skip_slices": True,
+        "skip_factor": 3,
+        "filter_empty_patches": False, 
+        "filter_uniform_patches": True,
+      }
+    #   {
+    #     "exp_name": "MMM_Exp27_mean_seg",
+    #     "train_csv": TRAIN_CSV,
+    #     "val_csv":   VAL_CSV,
+    #     "data_root": DATA_ROOT,
+
+    #     "aggregator_name": "mean",
+    #     "epochs": 20,
+    #     "num_triplets": 1000,
+    #     "lr": 1e-4,
+    #     "margin": 1.0,
+    #     "roi_size": (96,96,3),
+    #     "overlap": (10,10,1),
+    #     "attention_hidden_dim": 128,
+    #     "dropout": 0.2,
+    #     "weight_decay": 1e-4,
+    #     "use_scheduler": False,
+    #     "freeze_blocks": [0,1]
+    #   }, 
     #   {
     #     "exp_name": "MMM_Exp12_mil",
     #     "train_csv": TRAIN_CSV,

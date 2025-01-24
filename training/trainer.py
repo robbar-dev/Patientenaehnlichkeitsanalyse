@@ -58,8 +58,10 @@ class TripletTrainer(nn.Module):
         # Parameter für SinglePatientDataset
         skip_slices=True,
         skip_factor=2,
-        filter_empty_patches=True,
+        filter_empty_patches=False,
         min_nonzero_fraction=0.01,
+        filter_uniform_patches=True,   
+        min_std_threshold=0.01,         
         do_patch_minmax=False
     ):
         super().__init__()
@@ -73,6 +75,8 @@ class TripletTrainer(nn.Module):
         self.skip_factor = skip_factor
         self.filter_empty_patches = filter_empty_patches
         self.min_nonzero_fraction = min_nonzero_fraction
+        self.filter_uniform_patches = filter_uniform_patches  
+        self.min_std_threshold = min_std_threshold            
         self.do_patch_minmax = do_patch_minmax
 
         # (A) CNN-Backbone
@@ -117,12 +121,12 @@ class TripletTrainer(nn.Module):
 
         # Logging
         logging.debug("TESTDEBUG: Trainer.py REALLY imported!")
-
         logging.info(
             f"[TripletTrainer] aggregator={aggregator_name}, lr={lr}, margin={margin}, "
             f"dropout={dropout}, weight_decay={weight_decay}, freeze_blocks={freeze_blocks}, "
             f"skip_slices={skip_slices}, skip_factor={skip_factor}, "
             f"filter_empty_patches={filter_empty_patches}, min_nonzero_frac={min_nonzero_fraction}, "
+            f"filter_uniform_patches={filter_uniform_patches}, min_std_threshold={min_std_threshold}, "
             f"do_patch_minmax={do_patch_minmax}"
         )
 
@@ -140,6 +144,8 @@ class TripletTrainer(nn.Module):
             skip_factor=self.skip_factor,
             filter_empty_patches=self.filter_empty_patches,
             min_nonzero_fraction=self.min_nonzero_fraction,
+            filter_uniform_patches=self.filter_uniform_patches,  # <-- NEU
+            min_std_threshold=self.min_std_threshold,            # <-- NEU
             do_patch_minmax=self.do_patch_minmax
         )
         loader = DataLoader(ds, batch_size=32, shuffle=False)
@@ -152,11 +158,11 @@ class TripletTrainer(nn.Module):
                 patch_t = patch_t.to(self.device)
 
                 # --- Debug: Zeige Min/Max pro Batch (1x) ---
-                if batch_idx == 0:
-                    logging.debug(f"[compute_emb] Patch shape={patch_t.shape}, "
-                                  f"min={patch_t.min().item():.4f}, "
-                                  f"max={patch_t.max().item():.4f}, "
-                                  f"mean={patch_t.mean().item():.4f}")
+                # if batch_idx == 0:
+                #     logging.debug(f"[compute_emb] Patch shape={patch_t.shape}, "
+                #                   f"min={patch_t.min().item():.4f}, "
+                #                   f"max={patch_t.max().item():.4f}, "
+                #                   f"mean={patch_t.mean().item():.4f}")
 
                 emb = self.base_cnn(patch_t)  # => (B,512)
                 all_embs.append(emb)
@@ -183,6 +189,8 @@ class TripletTrainer(nn.Module):
             skip_factor=self.skip_factor,
             filter_empty_patches=self.filter_empty_patches,
             min_nonzero_fraction=self.min_nonzero_fraction,
+            filter_uniform_patches=self.filter_uniform_patches,  # <-- NEU
+            min_std_threshold=self.min_std_threshold,            # <-- NEU
             do_patch_minmax=self.do_patch_minmax
         )
         logging.debug(f"[_forward_patient] ds length = {len(ds)} patches")
@@ -194,11 +202,11 @@ class TripletTrainer(nn.Module):
         self.mil_agg.train()
 
         for batch_idx, patch_t in enumerate(loader):
-            logging.debug(f"[_forward_patient] batch_idx={batch_idx}, shape={patch_t.shape}")
-            if patch_t.numel() > 0:
-                logging.debug(f"  Patch min={patch_t.min().item():.3f} max={patch_t.max().item():.3f}")
-            else:
-                logging.debug("  Patch is empty?!")
+            # logging.debug(f"[_forward_patient] batch_idx={batch_idx}, shape={patch_t.shape}")
+            # if patch_t.numel() > 0:
+            #     logging.debug(f"  Patch min={patch_t.min().item():.3f} max={patch_t.max().item():.3f}")
+            # else:
+            #     logging.debug("  Patch is empty?!")
 
             patch_t = patch_t.to(self.device)
 
@@ -209,15 +217,11 @@ class TripletTrainer(nn.Module):
                               f"max={patch_t.max().item():.4f}, "
                               f"mean={patch_t.mean().item():.4f}")
 
-                # Extra: Visualisiere 1 Patch
-                if patch_t.ndim==4:
+                # Extra: Visualisiere 1 Patch (optional, nur Debug)
+                if patch_t.ndim == 4:
                     # patch_t: (B,C,H,W), nimm erst 1 Patch
                     patch_0 = patch_t[0].cpu().numpy()
                     # Optional: Erzeuge ein kleines PNG
-                    # => Falls es 3-Kanal => (3,H,W)
-                    # => Invertiere Achsen für plt.imshow => (H,W)
-                    # => Zeige slice 0 vom Channel 0
-                    # Nur als Test, man kann es auch voll plotten.
                     try:
                         import matplotlib.pyplot as plt
                         plt.figure()
@@ -342,12 +346,12 @@ class TripletTrainer(nn.Module):
             self.metric_history["recall"].append(recallK)
             self.metric_history["mAP"].append(map_val)
 
-            if map_val>self.best_val_map:
+            if map_val > self.best_val_map:
                 self.best_val_map = map_val
                 self.best_val_epoch = epoch
                 logging.info(f"=> New Best mAP={map_val:.4f} @ epoch={epoch}")
 
-            if epoch % visualize_every==0:
+            if epoch % visualize_every == 0:
                 self.visualize_embeddings(
                     df=df_val,
                     data_root=data_root_val,
