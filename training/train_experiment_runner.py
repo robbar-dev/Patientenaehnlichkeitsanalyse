@@ -64,12 +64,13 @@ def run_experiment(cfg):
     return best_map, best_epoch
 
 def main():
+    #logging.basicConfig(level=logging.DEBUG)
     logging.basicConfig(level=logging.INFO)
 
     # Pfade definieren:
     TRAIN_CSV = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv"
     VAL_CSV   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\validation\nlst_subset_v5_validation.csv"
-    DATA_ROOT = r"D:\thesis_robert\NLST_subset_v5_seg_nifti_1_5mm_Voxel_without_black_slices"
+    DATA_ROOT = r"D:\thesis_robert\NLST_subset_v5_SEG_NORM_nifti_1_5mm_Voxel"
 
     # Liste von Experiment-Konfigurationen
     experiments = [
@@ -84,11 +85,11 @@ def main():
         "num_triplets": 1000,
         "lr": 1e-4,
         "margin": 1.0,
-        "roi_size": (128,128,3),
-        "overlap": (18,18,1),
+        "roi_size": (96,96,3),
+        "overlap": (10,10,1),
         "attention_hidden_dim": 128,
         "dropout": 0.2,
-        "weight_decay": 1e-4,
+        "weight_decay": 1e-8,
         "use_scheduler": False, 
         "freeze_blocks": [0,1]
       },
@@ -101,7 +102,7 @@ def main():
         "aggregator_name": "mean",
         "epochs": 20,
         "num_triplets": 1000,
-        "lr": 1e-5,
+        "lr": 1e-4,
         "margin": 1.0,
         "roi_size": (96,96,3),
         "overlap": (10,10,1),

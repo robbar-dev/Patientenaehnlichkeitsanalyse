@@ -2,6 +2,7 @@ import os
 import torch
 import numpy as np
 import nibabel as nib
+import logging
 import torch.nn.functional as F
 import torch.utils.data as data
 
@@ -38,9 +39,9 @@ class SinglePatientDataset(data.Dataset):
         overlap=(10,10,1),
         skip_slices=False,
         skip_factor=2,
-        filter_empty_patches=True,
+        filter_empty_patches=False,
         min_nonzero_fraction=0.01,
-        do_patch_minmax=True
+        do_patch_minmax=False
     ):
         """
         Args:
@@ -69,12 +70,27 @@ class SinglePatientDataset(data.Dataset):
         self.do_patch_minmax = do_patch_minmax
 
         # Pfad zur .nii.gz
-        self.nii_path = os.path.join(
-            self.data_root,
-            f"pid_{pid}_study_yr_{study_yr}.nii.gz.nii.gz"
-        )
-        self.patches = []
-        if os.path.exists(self.nii_path):
+        # Suche nach Datei, die z. B. so anfängt: "pid_12345_study_yr_0"
+        # und *irgendwo* mit ".nii.gz" endet (egal, was dazwischen steht)
+        base_prefix = f"pid_{pid}_study_yr_{study_yr}"
+        self.nii_path = None
+
+        # Durchsuche das Verzeichnis
+        for fname in os.listdir(self.data_root):
+            # 1) Prüfe: fname startet mit base_prefix?
+            if fname.startswith(base_prefix):
+                # 2) Prüfe: fname endet mit '.nii.gz'?
+                if fname.endswith(".nii.gz"):
+                    # => Dann könnte es unsere Datei sein
+                    cand_path = os.path.join(self.data_root, fname)
+                    if os.path.isfile(cand_path):
+                        self.nii_path = cand_path
+                        break
+
+        if not self.nii_path:
+            logging.warning(f"[SinglePatientDataset] Keine Datei gefunden mit Prefix='{base_prefix}' in {self.data_root}")
+            self.patches = []
+        else:
             self.prepare_patches()
 
     def prepare_patches(self):

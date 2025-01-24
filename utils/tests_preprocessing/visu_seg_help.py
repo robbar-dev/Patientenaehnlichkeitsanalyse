@@ -5,8 +5,8 @@ from matplotlib.widgets import Slider
 import random
 
 # Konfiguration
-DATA_PATH = r"D:\thesis_robert\NLST_subset_v5_seg_nifti_1_5mm_Voxel_without_black_slices"
-SAMPLE_SIZE = 5 
+DATA_PATH = r"D:\thesis_robert\test_data_folder\norm_seg_test_data\cropped"
+SAMPLE_SIZE = 10 
 
 def load_nifti_volume(filepath):
     """
@@ -59,11 +59,16 @@ def visualize_sampled_nifti_series(data_path, sample_size):
             # Initiales Setup
             fig, ax = plt.subplots()
             plt.subplots_adjust(bottom=0.25)
-            img_plot = ax.imshow(volume[:, :, 0].T,
-                     cmap="gray",
-                     origin="lower",
-                     vmin=0,
-                     vmax=1)
+
+            # Min/Max-Normalisierung für die Visualisierung
+            # img_plot = ax.imshow(volume[:, :, 0].T,
+            #          cmap="gray",
+            #          origin="lower",
+            #          vmin=0,
+            #          vmax=1)
+            
+            # Ohne Min/Max-Normalisierung
+            img_plot = ax.imshow(volume[:, :, 0], cmap="gray")
 
             ax.set_title(f"{file_name} - Slice 0")
 

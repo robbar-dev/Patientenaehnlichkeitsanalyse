@@ -25,7 +25,7 @@ from model.mean_pooling import MeanPoolingAggregator
 # 3) TripletSampler
 from training.triplet_sampler import TripletSampler
 
-# 4) SinglePatientDataset mit Filtern & Normalisierung
+# 4) SinglePatientDataset
 from training.data_loader import SinglePatientDataset
 
 # 5) Evaluate-Funktionen
@@ -40,21 +40,6 @@ from sklearn.decomposition import PCA
 
 
 class TripletTrainer(nn.Module):
-    """
-    Ein erweiterter Trainer (nn.Module), der:
-      - base_cnn (ResNet18 oder ResNet50)
-      - mil_agg (AttentionMIL, MaxPooling, MeanPooling)
-      - TripletMarginLoss
-      - Adam-Optimizer
-      - (Optional) Scheduler
-
-    Er enthält:
-      - train_loop(...), train_with_val(...)
-      - compute_patient_embedding(...) => Validation-Embedding
-      - _forward_patient(...) => Training
-      - Visualisierungen: Loss-Kurve, t-SNE/PCA, etc.
-    """
-
     def __init__(
         self,
         aggregator_name,
@@ -70,32 +55,13 @@ class TripletTrainer(nn.Module):
         dropout=0.2,
         weight_decay=1e-5,
         freeze_blocks=None,
-        # Neu: Parameter für SinglePatientDataset
+        # Parameter für SinglePatientDataset
         skip_slices=False,
         skip_factor=2,
-        filter_empty_patches=True,
+        filter_empty_patches=False,
         min_nonzero_fraction=0.01,
-        do_patch_minmax=True
+        do_patch_minmax=False
     ):
-        """
-        Args:
-            aggregator_name: 'mil','max','mean'
-            df: Pandas DataFrame mit [pid, study_yr, combination]
-            data_root: Pfad zu den NIfTI .nii.gz
-            device: 'cuda'/'cpu'
-            lr: Lernrate
-            margin: Triplet-Margin
-            roi_size, overlap: Patch-Extraktion
-            pretrained: ob ResNetX auf ImageNet-Weights basiert
-            attention_hidden_dim: Hidden-Layer im Attention-MIL
-            dropout: Dropout-Rate
-            weight_decay: L2-Reg
-            freeze_blocks: z.B. [0,1] => layer1+layer2 freezen
-            skip_slices, skip_factor: Ob wir volume[..., ::2] etc. benutzen
-            filter_empty_patches: ob wir Patches, die ~leer sind, wegwerfen
-            min_nonzero_fraction: float, Schwelle an Nonzero
-            do_patch_minmax: pro Patch minmax normalisieren
-        """
         super().__init__()
         self.df = df
         self.data_root = data_root
@@ -103,7 +69,6 @@ class TripletTrainer(nn.Module):
         self.roi_size = roi_size
         self.overlap = overlap
 
-        # -> Parameter an SinglePatientDataset
         self.skip_slices = skip_slices
         self.skip_factor = skip_factor
         self.filter_empty_patches = filter_empty_patches
@@ -117,7 +82,7 @@ class TripletTrainer(nn.Module):
             freeze_blocks=freeze_blocks
         ).to(device)
 
-        # (B) Aggregation
+        # (B) Aggregator
         if aggregator_name == "mil":
             self.mil_agg = AttentionMILAggregator(
                 in_dim=512,
@@ -147,14 +112,11 @@ class TripletTrainer(nn.Module):
         # Tracking
         self.best_val_map = 0.0
         self.best_val_epoch = -1
-
-        # Epochen-Loss und Metrics
         self.epoch_losses = []
-        self.metric_history = {
-            "precision": [],
-            "recall": [],
-            "mAP": []
-        }
+        self.metric_history = {"precision": [], "recall": [], "mAP": []}
+
+        # Logging
+        logging.debug("TESTDEBUG: Trainer.py REALLY imported!")
 
         logging.info(
             f"[TripletTrainer] aggregator={aggregator_name}, lr={lr}, margin={margin}, "
@@ -164,15 +126,10 @@ class TripletTrainer(nn.Module):
             f"do_patch_minmax={do_patch_minmax}"
         )
 
-
     # --------------------------------------------------------------------------
-    # compute_patient_embedding (Val/Test) => SinglePatientDataset
+    # compute_patient_embedding (Val/Test)
     # --------------------------------------------------------------------------
     def compute_patient_embedding(self, pid, study_yr):
-        """
-        Lädt alle Patches => CNN => MIL => (1,512)
-        (keine Grad-Berechnung)
-        """
         ds = SinglePatientDataset(
             data_root=self.data_root,
             pid=pid,
@@ -191,22 +148,31 @@ class TripletTrainer(nn.Module):
         self.base_cnn.eval()
         self.mil_agg.eval()
         with torch.no_grad():
-            for patch_t in loader:
+            for batch_idx, patch_t in enumerate(loader):
                 patch_t = patch_t.to(self.device)
+
+                # --- Debug: Zeige Min/Max pro Batch (1x) ---
+                if batch_idx == 0:
+                    logging.debug(f"[compute_emb] Patch shape={patch_t.shape}, "
+                                  f"min={patch_t.min().item():.4f}, "
+                                  f"max={patch_t.max().item():.4f}, "
+                                  f"mean={patch_t.mean().item():.4f}")
+
                 emb = self.base_cnn(patch_t)  # => (B,512)
                 all_embs.append(emb)
 
         if len(all_embs) == 0:
             return torch.zeros((1,512), device=self.device)
 
-        patch_embs = torch.cat(all_embs, dim=0)  # => (N,512)
-        patient_emb = self.mil_agg(patch_embs)   # => (1,512)
+        patch_embs = torch.cat(all_embs, dim=0)
+        patient_emb = self.mil_agg(patch_embs)
         return patient_emb
 
     # --------------------------------------------------------------------------
-    # _forward_patient (Training) => CNN => MIL => (1,512) mit Grad
+    # _forward_patient (Training)
     # --------------------------------------------------------------------------
     def _forward_patient(self, pid, study_yr):
+        logging.debug(f"[_forward_patient] Start: pid={pid}, study_yr={study_yr}")
         ds = SinglePatientDataset(
             data_root=self.data_root,
             pid=pid,
@@ -219,32 +185,69 @@ class TripletTrainer(nn.Module):
             min_nonzero_fraction=self.min_nonzero_fraction,
             do_patch_minmax=self.do_patch_minmax
         )
+        logging.debug(f"[_forward_patient] ds length = {len(ds)} patches")
+
         loader = DataLoader(ds, batch_size=32, shuffle=False)
         patch_embs = []
 
         self.base_cnn.train()
         self.mil_agg.train()
-        for patch_t in loader:
+
+        for batch_idx, patch_t in enumerate(loader):
+            logging.debug(f"[_forward_patient] batch_idx={batch_idx}, shape={patch_t.shape}")
+            if patch_t.numel() > 0:
+                logging.debug(f"  Patch min={patch_t.min().item():.3f} max={patch_t.max().item():.3f}")
+            else:
+                logging.debug("  Patch is empty?!")
+
             patch_t = patch_t.to(self.device)
-            emb = self.base_cnn(patch_t)  # => (B,512)
+
+            # --- Debug: Zeige Min/Max pro Batch (1x) ---
+            if batch_idx == 0:
+                logging.debug(f"[forward_patient] Patches shape={patch_t.shape}, "
+                              f"min={patch_t.min().item():.4f}, "
+                              f"max={patch_t.max().item():.4f}, "
+                              f"mean={patch_t.mean().item():.4f}")
+
+                # Extra: Visualisiere 1 Patch
+                if patch_t.ndim==4:
+                    # patch_t: (B,C,H,W), nimm erst 1 Patch
+                    patch_0 = patch_t[0].cpu().numpy()
+                    # Optional: Erzeuge ein kleines PNG
+                    # => Falls es 3-Kanal => (3,H,W)
+                    # => Invertiere Achsen für plt.imshow => (H,W)
+                    # => Zeige slice 0 vom Channel 0
+                    # Nur als Test, man kann es auch voll plotten.
+                    try:
+                        import matplotlib.pyplot as plt
+                        plt.figure()
+                        plt.imshow(patch_0[0,:,:], cmap='gray')
+                        plt.title("[debug] 1.Patch_0 (Ch=0)")
+                        plt.savefig("debug_patch_0.png", dpi=80)
+                        plt.close()
+                        logging.debug("Patch 0 Visualisierung -> debug_patch_0.png")
+                    except:
+                        pass
+
+            emb = self.base_cnn(patch_t)
             patch_embs.append(emb)
 
         if len(patch_embs) == 0:
-            # kein Patch =>return dummy
+            logging.debug("[_forward_patient] WARNING: no patch_embs => returning dummy embedding.")
             return torch.zeros((1,512), device=self.device, requires_grad=True)
 
-        patch_embs = torch.cat(patch_embs, dim=0)  # =>(N,512)
-        patient_emb = self.mil_agg(patch_embs)     # =>(1,512)
+        patch_embs = torch.cat(patch_embs, dim=0)
+        patient_emb = self.mil_agg(patch_embs)
         return patient_emb
 
     # --------------------------------------------------------------------------
     # train_one_epoch => Sampler => TripletLoss
     # --------------------------------------------------------------------------
     def train_one_epoch(self, sampler):
+        logging.debug(f"[train_one_epoch] Starte Loop mit Sampler={sampler}")
         total_loss = 0.0
         steps = 0
         for step, (anchor_info, pos_info, neg_info) in enumerate(sampler):
-            # anchor_pid, anchor_sy, ...
             a_pid, a_sy = anchor_info['pid'], anchor_info['study_yr']
             p_pid, p_sy = pos_info['pid'], pos_info['study_yr']
             n_pid, n_sy = neg_info['pid'], neg_info['study_yr']
@@ -261,7 +264,7 @@ class TripletTrainer(nn.Module):
             total_loss += loss.item()
             steps += 1
 
-            if step%250 == 0:
+            if step % 250 == 0:
                 logging.info(f"[Step {step}] Triplet Loss = {loss.item():.4f}")
 
         avg_loss = total_loss / steps if steps>0 else 0.0
@@ -290,8 +293,7 @@ class TripletTrainer(nn.Module):
             sampler.reset_epoch()
 
     # --------------------------------------------------------------------------
-    # train_with_val => (N Epochen) => pro Epoche train_loop(1)
-    #                   => Evaluate => track best => Visualisierung
+    # train_with_val => Training + Validation
     # --------------------------------------------------------------------------
     def train_with_val(
         self,
@@ -340,13 +342,11 @@ class TripletTrainer(nn.Module):
             self.metric_history["recall"].append(recallK)
             self.metric_history["mAP"].append(map_val)
 
-            # best tracking
             if map_val>self.best_val_map:
                 self.best_val_map = map_val
                 self.best_val_epoch = epoch
                 logging.info(f"=> New Best mAP={map_val:.4f} @ epoch={epoch}")
 
-            # Visualisierung
             if epoch % visualize_every==0:
                 self.visualize_embeddings(
                     df=df_val,
@@ -380,12 +380,12 @@ class TripletTrainer(nn.Module):
             study_yr = row['study_yr']
             combo = row['combination']
 
-            emb = self.compute_patient_embedding(pid, study_yr)  # => (1,512)
+            emb = self.compute_patient_embedding(pid, study_yr)
             emb_np = emb.squeeze(0).cpu().numpy()
             embeddings_list.append(emb_np)
             combos.append(combo)
 
-        embeddings_arr = np.array(embeddings_list)  # (N,512)
+        embeddings_arr = np.array(embeddings_list)
         if method.lower()=='tsne':
             from sklearn.manifold import TSNE
             projector = TSNE(n_components=2, random_state=42)
@@ -393,7 +393,7 @@ class TripletTrainer(nn.Module):
             from sklearn.decomposition import PCA
             projector = PCA(n_components=2, random_state=42)
 
-        coords_2d = projector.fit_transform(embeddings_arr)  # => (N,2)
+        coords_2d = projector.fit_transform(embeddings_arr)
 
         plt.figure(figsize=(8,6))
         unique_combos = sorted(list(set(combos)))
@@ -495,46 +495,3 @@ class TripletTrainer(nn.Module):
             self.scheduler.load_state_dict(ckpt['scheduler'])
 
         logging.info(f"Checkpoint loaded from {path}")
-
-
-if __name__=="__main__":
-    import logging
-    logging.basicConfig(level=logging.INFO)
-
-    # Beispiel
-    # data_csv = r"C:\Users\xxx\train.csv"
-    # data_root = r"D:\my_nifti"
-    # df = pd.read_csv(data_csv)
-    # trainer = TripletTrainer(
-    #     aggregator_name="mil",
-    #     df=df,
-    #     data_root=data_root,
-    #     device='cuda',
-    #     lr=1e-4,
-    #     margin=1.0,
-    #     roi_size=(96,96,3),
-    #     overlap=(10,10,1),
-    #     pretrained=False,
-    #     attention_hidden_dim=128,
-    #     dropout=0.2,
-    #     weight_decay=1e-5,
-    #     freeze_blocks=None,
-    #     skip_slices=False,
-    #     skip_factor=2,
-    #     filter_empty_patches=True,
-    #     min_nonzero_fraction=0.01,
-    #     do_patch_minmax=True
-    # )
-    #
-    # best_map, best_epoch = trainer.train_with_val(
-    #     epochs=10,
-    #     num_triplets=500,
-    #     val_csv=r"C:\...\val.csv",
-    #     data_root_val=data_root,
-    #     K=5,
-    #     distance_metric='euclidean',
-    #     visualize_every=2,
-    #     visualize_method='pca',
-    #     output_dir='plots'
-    # )
-    # logging.info(f"Fertig. Best mAP={best_map:.4f} in Epoche={best_epoch}")
