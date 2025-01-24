@@ -56,9 +56,9 @@ class TripletTrainer(nn.Module):
         weight_decay=1e-5,
         freeze_blocks=None,
         # Parameter für SinglePatientDataset
-        skip_slices=False,
+        skip_slices=True,
         skip_factor=2,
-        filter_empty_patches=False,
+        filter_empty_patches=True,
         min_nonzero_fraction=0.01,
         do_patch_minmax=False
     ):

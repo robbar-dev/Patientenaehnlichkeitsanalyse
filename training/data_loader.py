@@ -37,7 +37,7 @@ class SinglePatientDataset(data.Dataset):
         study_yr,
         roi_size=(96,96,3),
         overlap=(10,10,1),
-        skip_slices=False,
+        skip_slices=True,
         skip_factor=2,
         filter_empty_patches=False,
         min_nonzero_fraction=0.01,

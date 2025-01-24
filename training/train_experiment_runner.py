@@ -73,6 +73,8 @@ def main():
     DATA_ROOT = r"D:\thesis_robert\NLST_subset_v5_SEG_NORM_nifti_1_5mm_Voxel"
 
     # Liste von Experiment-Konfigurationen
+
+    # trainer 
     experiments = [
       {
         "exp_name": "MMM_Exp27_mil_seg",
@@ -91,7 +93,9 @@ def main():
         "dropout": 0.2,
         "weight_decay": 1e-8,
         "use_scheduler": False, 
-        "freeze_blocks": [0,1]
+        "freeze_blocks": [0,1],
+        "skip_slices": True,
+        "filter_empty_patches": True
       },
       {
         "exp_name": "MMM_Exp27_mean_seg",
