@@ -1,13 +1,13 @@
 import os
 import nibabel as nib
 import numpy as np
-import SimpleITK as sitk
 import logging
+from tqdm import tqdm  # Für den Ladebalken
 
 # Konfiguration
 INPUT_DIR = r"D:\thesis_robert\NLST_subset_v5_SEG_NORM_nifti_1_5mm_Voxel"
-OUTPUT_DIR = r"D:\thesis_robert\NLST_subset_v5_SEG_NORM_nifti_1_5mm_Voxel_cropped"
-TOLERANCE = 3  # Anzahl der zusätzlichen Pixel um die Lunge herum
+OUTPUT_DIR = r"D:\thesis_robert\NLST_subset_v5_SEG_NORM_nifti_1_5mm_Voxel_cropped_5_toleranz"
+TOLERANCE = 5  # Anzahl der zusätzlichen Pixel um die Lunge herum
 
 # Logging konfigurieren
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -42,31 +42,9 @@ def save_nifti_volume(volume, affine, output_path):
     nifti_img = nib.Nifti1Image(volume, affine)
     nib.save(nifti_img, output_path)
 
-def calculate_initial_bounding_box(volume):
+def calculate_bounding_box(volume, tolerance):
     """
-    Berechnet eine enge Bounding Box basierend auf Nicht-Schwarz-Pixeln.
-
-    Args:
-        volume (np.ndarray): 3D-Array der NIfTI-Daten
-
-    Returns:
-        tuple: (min_row, max_row, min_col, max_col)
-    """
-    # Projektion über alle Slices
-    non_zero_projection = np.max(volume > 0, axis=2)
-
-    # Minimaler Bereich ohne Schwarz
-    rows = np.any(non_zero_projection, axis=1)
-    cols = np.any(non_zero_projection, axis=0)
-
-    min_row, max_row = np.where(rows)[0][[0, -1]]
-    min_col, max_col = np.where(cols)[0][[0, -1]]
-
-    return min_row, max_row, min_col, max_col
-
-def calculate_final_bounding_box(volume, tolerance):
-    """
-    Berechnet die Bounding Box der Lunge mit einer Toleranz basierend auf einer mittleren Slice.
+    Berechnet die Bounding Box des Volumens basierend auf mehreren Slices.
 
     Args:
         volume (np.ndarray): 3D-Array der NIfTI-Daten
@@ -75,11 +53,12 @@ def calculate_final_bounding_box(volume, tolerance):
     Returns:
         tuple: (min_row, max_row, min_col, max_col)
     """
-    middle_slice_idx = volume.shape[2] // 2
-    middle_slice = volume[:, :, middle_slice_idx] > 0
+    # Summiere über alle Slices, um die maximalen Bereiche zu erfassen
+    projection = np.max(volume, axis=2) > 0  # Maximalprojektion über die Z-Achse
 
-    rows = np.any(middle_slice, axis=1)
-    cols = np.any(middle_slice, axis=0)
+    # Finde minimale und maximale Koordinaten
+    rows = np.any(projection, axis=1)
+    cols = np.any(projection, axis=0)
 
     min_row, max_row = np.where(rows)[0][[0, -1]]
     min_col, max_col = np.where(cols)[0][[0, -1]]
@@ -111,10 +90,11 @@ def main():
     # Sicherstellen, dass das Ausgabe-Verzeichnis existiert
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    for file_name in os.listdir(INPUT_DIR):
-        if not file_name.endswith(".nii.gz"):
-            continue
+    # Liste aller Dateien im Eingabeverzeichnis
+    files = [file for file in os.listdir(INPUT_DIR) if file.endswith(".nii.gz")]
 
+    # Fortschrittsanzeige mit tqdm
+    for file_name in tqdm(files, desc="Verarbeitung von Dateien", unit="Datei"):
         input_path = os.path.join(INPUT_DIR, file_name)
         output_path = os.path.join(OUTPUT_DIR, file_name)
 
@@ -124,16 +104,14 @@ def main():
             # Volume laden
             volume, affine = load_nifti_volume(input_path)
 
-            # Erste Bounding Box berechnen, um schwarzen Rand zu entfernen
-            initial_bounding_box = calculate_initial_bounding_box(volume)
-            cropped_volume = crop_volume(volume, initial_bounding_box)
+            # Bounding Box berechnen basierend auf allen Slices
+            bounding_box = calculate_bounding_box(volume, TOLERANCE)
 
-            # Finale Bounding Box basierend auf der mittleren Slice berechnen
-            final_bounding_box = calculate_final_bounding_box(cropped_volume, TOLERANCE)
-            final_cropped_volume = crop_volume(cropped_volume, final_bounding_box)
+            # Volume zuschneiden
+            cropped_volume = crop_volume(volume, bounding_box)
 
             # Zuschnitt speichern
-            save_nifti_volume(final_cropped_volume, affine, output_path)
+            save_nifti_volume(cropped_volume, affine, output_path)
             logging.info(f"Gespeichert: {output_path}")
 
         except Exception as e:

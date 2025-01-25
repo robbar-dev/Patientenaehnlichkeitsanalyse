@@ -385,7 +385,7 @@ class TripletTrainer(nn.Module):
             combo = row['combination']
 
             emb = self.compute_patient_embedding(pid, study_yr)
-            emb_np = emb.squeeze(0).cpu().numpy()
+            emb_np = emb.squeeze(0).detach().cpu().numpy()
             embeddings_list.append(emb_np)
             combos.append(combo)
 
