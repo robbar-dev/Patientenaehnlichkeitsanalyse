@@ -67,20 +67,20 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     # Pfade definieren:
-    TRAIN_CSV = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\classification_test\training\nlst_subset_v5_2class_training.csv"
-    VAL_CSV   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\classification_test\val\nlst_subset_v5_2class_val.csv"
+    TRAIN_CSV = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\classification_test_02\training\nlst_subset_v5_2class_02_training.csv"
+    VAL_CSV   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\classification_test_02\val\nlst_subset_v5_2class_02_val.csv"
     DATA_ROOT = r"D:\thesis_robert\NLST_subset_v5_nifti_3mm_Voxel"
 
     # Liste von Experiment-Konfigurationen
     experiments = [
       {
-        "exp_name": "MMM_Exp14_max",
+        "exp_name": "Exp35_mil_2class_02",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
 
-        "aggregator_name": "max",
-        "epochs": 15,
+        "aggregator_name": "mil",
+        "epochs": 20,
         "num_triplets": 350,
         "lr": 1e-5,
         "margin": 1.0,
@@ -90,46 +90,46 @@ def main():
         "dropout": 0.2,
         "weight_decay": 1e-4,
         "use_scheduler": False, 
-        "freeze_blocks": [0,1]
+        "freeze_blocks": [0]
       },
-      {
-        "exp_name": "MMM_Exp15_mean",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
+      # {
+      #   "exp_name": "Exp35_mil_2class_02",
+      #   "train_csv": TRAIN_CSV,
+      #   "val_csv":   VAL_CSV,
+      #   "data_root": DATA_ROOT,
 
-        "aggregator_name": "mean",
-        "epochs": 15,
-        "num_triplets": 350,
-        "lr": 1e-5,
-        "margin": 1.0,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": False,
-        "freeze_blocks": [0,1]
-      }, 
-      {
-        "exp_name": "MMM_Exp16_mil",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
+      #   "aggregator_name": "mil",
+      #   "epochs": 30,
+      #   "num_triplets": 1000,
+      #   "lr": 1e-5,
+      #   "margin": 1.0,
+      #   "roi_size": (96,96,3),
+      #   "overlap": (10,10,1),
+      #   "attention_hidden_dim": 128,
+      #   "dropout": 0.2,
+      #   "weight_decay": 1e-4,
+      #   "use_scheduler": False, 
+      #   "freeze_blocks": [0]
+      # }, 
+      # {
+      #   "exp_name": "MMM_Exp16_mil",
+      #   "train_csv": TRAIN_CSV,
+      #   "val_csv":   VAL_CSV,
+      #   "data_root": DATA_ROOT,
 
-        "aggregator_name": "mil",
-        "epochs": 15,
-        "num_triplets": 350,
-        "lr": 1e-5,
-        "margin": 1.0,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": False,
-        "freeze_blocks": [0,1]
-      }      
+      #   "aggregator_name": "mil",
+      #   "epochs": 15,
+      #   "num_triplets": 350,
+      #   "lr": 1e-5,
+      #   "margin": 1.0,
+      #   "roi_size": (96,96,3),
+      #   "overlap": (10,10,1),
+      #   "attention_hidden_dim": 128,
+      #   "dropout": 0.2,
+      #   "weight_decay": 1e-4,
+      #   "use_scheduler": False,
+      #   "freeze_blocks": [0,1]
+      # }      
     ]
 
     # CSV-Ausgabedatei
