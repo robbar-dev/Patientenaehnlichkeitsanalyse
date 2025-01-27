@@ -5,8 +5,8 @@ from matplotlib.widgets import Slider
 import random
 
 # Konfiguration
-DATA_PATH = r"D:\thesis_robert\test_data_folder\black_series\cropped_test"
-SAMPLE_SIZE = 10 
+DATA_PATH = r"D:\thesis_robert\NLST_subset_v5_SEG_nifti_1_5mm_Voxel"
+SAMPLE_SIZE = 20 
 
 def load_nifti_volume(filepath):
     """

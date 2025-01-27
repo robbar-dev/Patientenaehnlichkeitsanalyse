@@ -73,4 +73,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python utils\tests_preprocessing\debug_gzipFiles_resampling_normalization.py --input_dir "D:\thesis_robert\subset_v5_seg" --output_file "D:\thesis_robert\corrupted_pids"
+# python utils\tests_preprocessing\debug_gzipFiles_resampling_normalization.py --input_dir "D:\thesis_robert\xx_test\xx" --output_file "D:\thesis_robert\corrupted_pids"
