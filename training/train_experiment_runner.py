@@ -68,87 +68,87 @@ def main():
 
     # Pfade definieren:
     TRAIN_CSV = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv"
-    VAL_CSV   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\validation\nlst_subset_v5_validation.csv"
+    VAL_CSV   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv"
     DATA_ROOT = r"D:\thesis_robert\NLST_subset_v5_nifti_3mm_Voxel"
 
     # Liste von Experiment-Konfigurationen
     experiments = [
       {
-        "exp_name": "MMM_Exp20_mean",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
-
-        "aggregator_name": "mean",
-        "epochs": 40,
-        "num_triplets": 1000,
-        "lr": 1e-3,
-        "margin": 1.3,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": True, 
-        "freeze_blocks": [0,1]
-      },
-      {
-        "exp_name": "MMM_Exp21_mil",
+        "exp_name": "MMM_Exp34_mil",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
 
         "aggregator_name": "mil",
-        "epochs": 40,
+        "epochs": 30,
         "num_triplets": 1000,
-        "lr": 1e-3,
-        "margin": 1.3,
+        "lr": 1e-5,
+        "margin": 1.0,
         "roi_size": (96,96,3),
         "overlap": (10,10,1),
         "attention_hidden_dim": 128,
         "dropout": 0.2,
         "weight_decay": 1e-4,
-        "use_scheduler": True,
-        "freeze_blocks": [0,1]
-      }, 
-      {
-        "exp_name": "MMM_Exp20_mean",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
-
-        "aggregator_name": "mean",
-        "epochs": 40,
-        "num_triplets": 1000,
-        "lr": 3e-4,
-        "margin": 1.5,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": True, 
-        "freeze_blocks": [0,1]
+        "use_scheduler": False, 
+        "freeze_blocks": [0]
       },
-      {
-        "exp_name": "MMM_Exp21_mil",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
+      # {
+      #   "exp_name": "MMM_Exp21_mil",
+      #   "train_csv": TRAIN_CSV,
+      #   "val_csv":   VAL_CSV,
+      #   "data_root": DATA_ROOT,
 
-        "aggregator_name": "mil",
-        "epochs": 40,
-        "num_triplets": 1000,
-        "lr": 3e-4,
-        "margin": 1.5,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": True,
-        "freeze_blocks": [0,1]
-      }
+      #   "aggregator_name": "mil",
+      #   "epochs": 40,
+      #   "num_triplets": 1000,
+      #   "lr": 1e-3,
+      #   "margin": 1.3,
+      #   "roi_size": (96,96,3),
+      #   "overlap": (10,10,1),
+      #   "attention_hidden_dim": 128,
+      #   "dropout": 0.2,
+      #   "weight_decay": 1e-4,
+      #   "use_scheduler": True,
+      #   "freeze_blocks": [0,1]
+      # }, 
+      # {
+      #   "exp_name": "MMM_Exp20_mean",
+      #   "train_csv": TRAIN_CSV,
+      #   "val_csv":   VAL_CSV,
+      #   "data_root": DATA_ROOT,
+
+      #   "aggregator_name": "mean",
+      #   "epochs": 40,
+      #   "num_triplets": 1000,
+      #   "lr": 3e-4,
+      #   "margin": 1.5,
+      #   "roi_size": (96,96,3),
+      #   "overlap": (10,10,1),
+      #   "attention_hidden_dim": 128,
+      #   "dropout": 0.2,
+      #   "weight_decay": 1e-4,
+      #   "use_scheduler": True, 
+      #   "freeze_blocks": [0,1]
+      # },
+      # {
+      #   "exp_name": "MMM_Exp21_mil",
+      #   "train_csv": TRAIN_CSV,
+      #   "val_csv":   VAL_CSV,
+      #   "data_root": DATA_ROOT,
+
+      #   "aggregator_name": "mil",
+      #   "epochs": 40,
+      #   "num_triplets": 1000,
+      #   "lr": 3e-4,
+      #   "margin": 1.5,
+      #   "roi_size": (96,96,3),
+      #   "overlap": (10,10,1),
+      #   "attention_hidden_dim": 128,
+      #   "dropout": 0.2,
+      #   "weight_decay": 1e-4,
+      #   "use_scheduler": True,
+      #   "freeze_blocks": [0,1]
+      # }
     ]
 
     # CSV-Ausgabedatei
