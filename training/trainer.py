@@ -14,30 +14,20 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# 1) ResNet18-Feature Extractor
 from model.base_cnn import BaseCNN
-
-# 2) Aggregatoren
 from model.mil_aggregator import AttentionMILAggregator
 from model.max_pooling import MaxPoolingAggregator
 from model.mean_pooling import MeanPoolingAggregator
-
-# 3) TripletSampler
 from training.triplet_sampler import TripletSampler
-
-# 4) SinglePatientDataset
 from training.data_loader import SinglePatientDataset
-
-# 5) Evaluate-Funktionen
 from evaluation.metrics import evaluate_model
 
 import matplotlib
-matplotlib.use('Agg')  # kein GUI-Fenster
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
-
 
 class TripletTrainer(nn.Module):
     def __init__(
@@ -55,14 +45,16 @@ class TripletTrainer(nn.Module):
         dropout=0.2,
         weight_decay=1e-5,
         freeze_blocks=None,
-        # Parameter für SinglePatientDataset
+        # SinglePatientDataset-Parameter
         skip_slices=True,
         skip_factor=2,
         filter_empty_patches=False,
         min_nonzero_fraction=0.01,
-        filter_uniform_patches=True,   
-        min_std_threshold=0.01,         
-        do_patch_minmax=False
+        filter_uniform_patches=True,
+        min_std_threshold=0.01,
+        do_patch_minmax=False,
+        # Hybrid-Loss
+        lambda_bce=1.0  # Gewicht für BCE vs. Triplet
     ):
         super().__init__()
         self.df = df
@@ -75,9 +67,11 @@ class TripletTrainer(nn.Module):
         self.skip_factor = skip_factor
         self.filter_empty_patches = filter_empty_patches
         self.min_nonzero_fraction = min_nonzero_fraction
-        self.filter_uniform_patches = filter_uniform_patches  
-        self.min_std_threshold = min_std_threshold            
+        self.filter_uniform_patches = filter_uniform_patches
+        self.min_std_threshold = min_std_threshold
         self.do_patch_minmax = do_patch_minmax
+
+        self.lambda_bce = lambda_bce  # NEU
 
         # (A) CNN-Backbone
         self.base_cnn = BaseCNN(
@@ -103,14 +97,17 @@ class TripletTrainer(nn.Module):
         # (C) TripletLoss
         self.triplet_loss_fn = nn.TripletMarginLoss(margin=margin, p=2)
 
-        # (D) Optimizer
-        self.optimizer = optim.Adam(
-            list(self.base_cnn.parameters()) + list(self.mil_agg.parameters()),
-            lr=lr,
-            weight_decay=weight_decay
-        )
+        # (D) +++ Multi-Label-Kopf + BCE-Loss +++
+        self.classifier = nn.Linear(512, 3).to(device)  # 3 Merkmale
+        self.bce_loss_fn = nn.BCEWithLogitsLoss()
 
-        # (E) Optional Scheduler
+        # (E) Optimizer
+        params = list(self.base_cnn.parameters()) + \
+                 list(self.mil_agg.parameters()) + \
+                 list(self.classifier.parameters())
+        self.optimizer = optim.Adam(params, lr=lr, weight_decay=weight_decay)
+
+        # (F) Optional Scheduler
         self.scheduler = None
 
         # Tracking
@@ -119,21 +116,24 @@ class TripletTrainer(nn.Module):
         self.epoch_losses = []
         self.metric_history = {"precision": [], "recall": [], "mAP": []}
 
-        # Logging
-        logging.debug("TESTDEBUG: Trainer.py REALLY imported!")
         logging.info(
             f"[TripletTrainer] aggregator={aggregator_name}, lr={lr}, margin={margin}, "
             f"dropout={dropout}, weight_decay={weight_decay}, freeze_blocks={freeze_blocks}, "
             f"skip_slices={skip_slices}, skip_factor={skip_factor}, "
             f"filter_empty_patches={filter_empty_patches}, min_nonzero_frac={min_nonzero_fraction}, "
             f"filter_uniform_patches={filter_uniform_patches}, min_std_threshold={min_std_threshold}, "
-            f"do_patch_minmax={do_patch_minmax}"
+            f"do_patch_minmax={do_patch_minmax}, lambda_bce={lambda_bce}"
         )
 
     # --------------------------------------------------------------------------
-    # compute_patient_embedding (Val/Test)
+    # FORWARD => Patient => (embedding, logits)
     # --------------------------------------------------------------------------
-    def compute_patient_embedding(self, pid, study_yr):
+    def _forward_patient(self, pid, study_yr):
+        """
+        Liefert (embedding, logits).
+        - embedding: (1,512)
+        - logits: (1,3) => ungeclippte Ausgaben für BCE
+        """
         ds = SinglePatientDataset(
             data_root=self.data_root,
             pid=pid,
@@ -144,8 +144,50 @@ class TripletTrainer(nn.Module):
             skip_factor=self.skip_factor,
             filter_empty_patches=self.filter_empty_patches,
             min_nonzero_fraction=self.min_nonzero_fraction,
-            filter_uniform_patches=self.filter_uniform_patches,  # <-- NEU
-            min_std_threshold=self.min_std_threshold,            # <-- NEU
+            filter_uniform_patches=self.filter_uniform_patches,
+            min_std_threshold=self.min_std_threshold,
+            do_patch_minmax=self.do_patch_minmax
+        )
+        loader = DataLoader(ds, batch_size=32, shuffle=False)
+        patch_embs = []
+
+        self.base_cnn.train()
+        self.mil_agg.train()
+        self.classifier.train()
+
+        for patch_t in loader:
+            patch_t = patch_t.to(self.device)
+            emb = self.base_cnn(patch_t)  # => (B,512)
+            patch_embs.append(emb)
+
+        if len(patch_embs) == 0:
+            # Leeres Volume => Dummy
+            dummy = torch.zeros((1,512), device=self.device, requires_grad=True)
+            dummy_logits = self.classifier(dummy)  # => (1,3)
+            return dummy, dummy_logits
+
+        patch_embs = torch.cat(patch_embs, dim=0)  # => (N,512)
+        patient_emb = self.mil_agg(patch_embs)      # => (1,512)
+        logits = self.classifier(patient_emb)       # => (1,3)
+        return patient_emb, logits
+
+    def compute_patient_embedding(self, pid, study_yr):
+        """
+        Für Validierung: wir wollen NUR das Embedding.
+        => fix: set .eval()
+        """
+        ds = SinglePatientDataset(
+            data_root=self.data_root,
+            pid=pid,
+            study_yr=study_yr,
+            roi_size=self.roi_size,
+            overlap=self.overlap,
+            skip_slices=self.skip_slices,
+            skip_factor=self.skip_factor,
+            filter_empty_patches=self.filter_empty_patches,
+            min_nonzero_fraction=self.min_nonzero_fraction,
+            filter_uniform_patches=self.filter_uniform_patches,
+            min_std_threshold=self.min_std_threshold,
             do_patch_minmax=self.do_patch_minmax
         )
         loader = DataLoader(ds, batch_size=32, shuffle=False)
@@ -153,18 +195,12 @@ class TripletTrainer(nn.Module):
 
         self.base_cnn.eval()
         self.mil_agg.eval()
+        self.classifier.eval()
+
         with torch.no_grad():
-            for batch_idx, patch_t in enumerate(loader):
+            for patch_t in loader:
                 patch_t = patch_t.to(self.device)
-
-                # --- Debug: Zeige Min/Max pro Batch (1x) ---
-                # if batch_idx == 0:
-                #     logging.debug(f"[compute_emb] Patch shape={patch_t.shape}, "
-                #                   f"min={patch_t.min().item():.4f}, "
-                #                   f"max={patch_t.max().item():.4f}, "
-                #                   f"mean={patch_t.mean().item():.4f}")
-
-                emb = self.base_cnn(patch_t)  # => (B,512)
+                emb = self.base_cnn(patch_t)
                 all_embs.append(emb)
 
         if len(all_embs) == 0:
@@ -175,92 +211,45 @@ class TripletTrainer(nn.Module):
         return patient_emb
 
     # --------------------------------------------------------------------------
-    # _forward_patient (Training)
-    # --------------------------------------------------------------------------
-    def _forward_patient(self, pid, study_yr):
-        logging.debug(f"[_forward_patient] Start: pid={pid}, study_yr={study_yr}")
-        ds = SinglePatientDataset(
-            data_root=self.data_root,
-            pid=pid,
-            study_yr=study_yr,
-            roi_size=self.roi_size,
-            overlap=self.overlap,
-            skip_slices=self.skip_slices,
-            skip_factor=self.skip_factor,
-            filter_empty_patches=self.filter_empty_patches,
-            min_nonzero_fraction=self.min_nonzero_fraction,
-            filter_uniform_patches=self.filter_uniform_patches,  # <-- NEU
-            min_std_threshold=self.min_std_threshold,            # <-- NEU
-            do_patch_minmax=self.do_patch_minmax
-        )
-        logging.debug(f"[_forward_patient] ds length = {len(ds)} patches")
-
-        loader = DataLoader(ds, batch_size=32, shuffle=False)
-        patch_embs = []
-
-        self.base_cnn.train()
-        self.mil_agg.train()
-
-        for batch_idx, patch_t in enumerate(loader):
-            # logging.debug(f"[_forward_patient] batch_idx={batch_idx}, shape={patch_t.shape}")
-            # if patch_t.numel() > 0:
-            #     logging.debug(f"  Patch min={patch_t.min().item():.3f} max={patch_t.max().item():.3f}")
-            # else:
-            #     logging.debug("  Patch is empty?!")
-
-            patch_t = patch_t.to(self.device)
-
-            # --- Debug: Zeige Min/Max pro Batch (1x) ---
-            if batch_idx == 0:
-                logging.debug(f"[forward_patient] Patches shape={patch_t.shape}, "
-                              f"min={patch_t.min().item():.4f}, "
-                              f"max={patch_t.max().item():.4f}, "
-                              f"mean={patch_t.mean().item():.4f}")
-
-                # Extra: Visualisiere 1 Patch (optional, nur Debug)
-                if patch_t.ndim == 4:
-                    # patch_t: (B,C,H,W), nimm erst 1 Patch
-                    patch_0 = patch_t[0].cpu().numpy()
-                    # Optional: Erzeuge ein kleines PNG
-                    try:
-                        import matplotlib.pyplot as plt
-                        plt.figure()
-                        plt.imshow(patch_0[0,:,:], cmap='gray')
-                        plt.title("[debug] 1.Patch_0 (Ch=0)")
-                        plt.savefig("debug_patch_0.png", dpi=80)
-                        plt.close()
-                        logging.debug("Patch 0 Visualisierung -> debug_patch_0.png")
-                    except:
-                        pass
-
-            emb = self.base_cnn(patch_t)
-            patch_embs.append(emb)
-
-        if len(patch_embs) == 0:
-            logging.debug("[_forward_patient] WARNING: no patch_embs => returning dummy embedding.")
-            return torch.zeros((1,512), device=self.device, requires_grad=True)
-
-        patch_embs = torch.cat(patch_embs, dim=0)
-        patient_emb = self.mil_agg(patch_embs)
-        return patient_emb
-
-    # --------------------------------------------------------------------------
-    # train_one_epoch => Sampler => TripletLoss
+    # train_one_epoch => Triplet + BCE
     # --------------------------------------------------------------------------
     def train_one_epoch(self, sampler):
-        logging.debug(f"[train_one_epoch] Starte Loop mit Sampler={sampler}")
         total_loss = 0.0
         steps = 0
         for step, (anchor_info, pos_info, neg_info) in enumerate(sampler):
+            # Anchor
             a_pid, a_sy = anchor_info['pid'], anchor_info['study_yr']
+            a_label = anchor_info['multi_label']  # [x,y,z]
+            # Positive
             p_pid, p_sy = pos_info['pid'], pos_info['study_yr']
+            p_label = pos_info['multi_label']
+            # Negative
             n_pid, n_sy = neg_info['pid'], neg_info['study_yr']
+            n_label = neg_info['multi_label']
 
-            anchor_emb = self._forward_patient(a_pid, a_sy)
-            pos_emb    = self._forward_patient(p_pid, p_sy)
-            neg_emb    = self._forward_patient(n_pid, n_sy)
+            # 1) Vorwärts
+            a_emb, a_logits = self._forward_patient(a_pid, a_sy)
+            p_emb, p_logits = self._forward_patient(p_pid, p_sy)
+            n_emb, n_logits = self._forward_patient(n_pid, n_sy)
 
-            loss = self.triplet_loss_fn(anchor_emb, pos_emb, neg_emb)
+            # 2) TripletLoss
+            triplet_loss = self.triplet_loss_fn(a_emb, p_emb, n_emb)
+
+            # 3) BCE-Loss
+            # Wir berechnen BCE für anchor, pos, neg separat
+            # multi_label => Tensor [0,1,1]
+            a_label_t = torch.tensor(a_label, dtype=torch.float32, device=self.device).unsqueeze(0)  # => (1,3)
+            p_label_t = torch.tensor(p_label, dtype=torch.float32, device=self.device).unsqueeze(0)
+            n_label_t = torch.tensor(n_label, dtype=torch.float32, device=self.device).unsqueeze(0)
+
+            bce_a = self.bce_loss_fn(a_logits, a_label_t)
+            bce_p = self.bce_loss_fn(p_logits, p_label_t)
+            bce_n = self.bce_loss_fn(n_logits, n_label_t)
+            bce_loss = (bce_a + bce_p + bce_n)/3.0
+
+            # 4) Gesamt-Loss
+            loss = triplet_loss + self.lambda_bce * bce_loss
+
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
@@ -269,7 +258,7 @@ class TripletTrainer(nn.Module):
             steps += 1
 
             if step % 250 == 0:
-                logging.info(f"[Step {step}] Triplet Loss = {loss.item():.4f}")
+                logging.info(f"[Step {step}] Loss={loss.item():.4f}  Triplet={triplet_loss.item():.4f}  BCE={bce_loss.item():.4f}")
 
         avg_loss = total_loss / steps if steps>0 else 0.0
         logging.info(f"Epoch Loss = {avg_loss:.4f}")
