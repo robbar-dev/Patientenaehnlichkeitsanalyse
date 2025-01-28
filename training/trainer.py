@@ -9,21 +9,30 @@ import datetime
 
 from torch.utils.data import DataLoader
 
+# Füge Dein Projektverzeichnis hinzu
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+# 1) ResNet18-Feature Extractor
 from model.base_cnn import BaseCNN
+
+# 2) Aggregatoren
 from model.mil_aggregator import AttentionMILAggregator
 from model.max_pooling import MaxPoolingAggregator
 from model.mean_pooling import MeanPoolingAggregator
+
+# 3) TripletSampler
 from training.triplet_sampler import TripletSampler
+
+# 4) SinglePatientDataset
 from training.data_loader import SinglePatientDataset
 
+# 5) Evaluate-Funktionen
 from evaluation.metrics import evaluate_model
 
 import matplotlib
-matplotlib.use('Agg')  # damit kein GUI-Fenster geöffnet wird (z. B. auf Server)
+matplotlib.use('Agg')  # kein GUI-Fenster
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import TSNE
@@ -31,30 +40,6 @@ from sklearn.decomposition import PCA
 
 
 class TripletTrainer(nn.Module):
-    """
-    Ein erweiterter Trainer, der nn.Module erbt, um state_dict() und load_state_dict()
-    nativ verwenden zu können. Enthält:
-    - base_cnn (ResNet18) mit optionalem Teil-Freeze
-    - mil_agg (AttentionMIL, MaxPooling, MeanPooling)
-    - triplet_loss
-    - optimizer (+ optional scheduler)
-    - Methoden: train_loop, train_with_val, compute_patient_embedding, ...
-    - Visualisierungen:
-      -> Loss-Kurve
-      -> t-SNE/PCA-Einbettungen (alle N Epochen)
-      -> Precision@K, Recall@K, mAP-Kurven
-    - save_checkpoint / load_checkpoint
-
-    Ablauf:
-      1) train_with_val(...) läuft Epochen durch
-      2) pro Epoche => train_loop(num_epochs=1)
-      3) evaluate_model(...) erfasst (Precision@K, Recall@K, mAP)
-      4) Speichern der Metriken in self.metric_history
-      5) Am Ende Plotten:
-         - self.plot_loss_curve()
-         - self.plot_metric_curves() (Precision@K, Recall@K, mAP)
-    """
-
     def __init__(
         self,
         aggregator_name,
@@ -69,22 +54,16 @@ class TripletTrainer(nn.Module):
         attention_hidden_dim=128,
         dropout=0.2,
         weight_decay=1e-5,
-        freeze_blocks=None
+        freeze_blocks=None,
+        # Parameter für SinglePatientDataset
+        skip_slices=True,
+        skip_factor=2,
+        filter_empty_patches=False,
+        min_nonzero_fraction=0.01,
+        filter_uniform_patches=True,   
+        min_std_threshold=0.01,         
+        do_patch_minmax=False
     ):
-        """
-        Args:
-            aggregator_name: 'mil', 'max', oder 'mean'
-            df: Pandas DataFrame [pid, study_yr, combination]
-            data_root: Pfad zu .nii.gz
-            device: 'cuda'/'cpu'
-            lr, margin: Hyperparams
-            roi_size, overlap: Patch-Extraktion
-            pretrained: ob ResNet18 auf ImageNet-Weights basiert
-            attention_hidden_dim: Hidden für Gated-Attention
-            dropout: Dropout-Rate im Aggregator
-            weight_decay: L2-Regularization
-            freeze_blocks: None oder [0,1,2...] um ResNet-Blocks einzufrieren
-        """
         super().__init__()
         self.df = df
         self.data_root = data_root
@@ -92,14 +71,22 @@ class TripletTrainer(nn.Module):
         self.roi_size = roi_size
         self.overlap = overlap
 
-        # 1) CNN-Backbone
+        self.skip_slices = skip_slices
+        self.skip_factor = skip_factor
+        self.filter_empty_patches = filter_empty_patches
+        self.min_nonzero_fraction = min_nonzero_fraction
+        self.filter_uniform_patches = filter_uniform_patches  
+        self.min_std_threshold = min_std_threshold            
+        self.do_patch_minmax = do_patch_minmax
+
+        # (A) CNN-Backbone
         self.base_cnn = BaseCNN(
             model_name='resnet18',
             pretrained=pretrained,
             freeze_blocks=freeze_blocks
         ).to(device)
 
-        # 2) Aggregator
+        # (B) Aggregator
         if aggregator_name == "mil":
             self.mil_agg = AttentionMILAggregator(
                 in_dim=512,
@@ -113,112 +100,167 @@ class TripletTrainer(nn.Module):
         else:
             raise ValueError(f"Unbekannter Aggregator: {aggregator_name}")
 
-        # 3) TripletLoss
+        # (C) TripletLoss
         self.triplet_loss_fn = nn.TripletMarginLoss(margin=margin, p=2)
 
-        # 4) Optimizer
+        # (D) Optimizer
         self.optimizer = optim.Adam(
             list(self.base_cnn.parameters()) + list(self.mil_agg.parameters()),
             lr=lr,
             weight_decay=weight_decay
         )
 
-        # 5) Optional Scheduler
+        # (E) Optional Scheduler
         self.scheduler = None
 
-        # Best Val-Tracking
+        # Tracking
         self.best_val_map = 0.0
         self.best_val_epoch = -1
-
-        # Epochen-Loss Liste
         self.epoch_losses = []
+        self.metric_history = {"precision": [], "recall": [], "mAP": []}
 
-        # NEU: Metrik-Verlauf (Epoche => (Precision@K, Recall@K, mAP))
-        self.metric_history = {
-            "precision": [],
-            "recall": [],
-            "mAP": []
-        }
-
+        # Logging
+        logging.debug("TESTDEBUG: Trainer.py REALLY imported!")
         logging.info(
             f"[TripletTrainer] aggregator={aggregator_name}, lr={lr}, margin={margin}, "
-            f"dropout={dropout}, weight_decay={weight_decay}, freeze_blocks={freeze_blocks}"
+            f"dropout={dropout}, weight_decay={weight_decay}, freeze_blocks={freeze_blocks}, "
+            f"skip_slices={skip_slices}, skip_factor={skip_factor}, "
+            f"filter_empty_patches={filter_empty_patches}, min_nonzero_frac={min_nonzero_fraction}, "
+            f"filter_uniform_patches={filter_uniform_patches}, min_std_threshold={min_std_threshold}, "
+            f"do_patch_minmax={do_patch_minmax}"
         )
 
-    # --------------------------------------
+    # --------------------------------------------------------------------------
     # compute_patient_embedding (Val/Test)
-    # --------------------------------------
+    # --------------------------------------------------------------------------
     def compute_patient_embedding(self, pid, study_yr):
         ds = SinglePatientDataset(
             data_root=self.data_root,
             pid=pid,
             study_yr=study_yr,
             roi_size=self.roi_size,
-            overlap=self.overlap
+            overlap=self.overlap,
+            skip_slices=self.skip_slices,
+            skip_factor=self.skip_factor,
+            filter_empty_patches=self.filter_empty_patches,
+            min_nonzero_fraction=self.min_nonzero_fraction,
+            filter_uniform_patches=self.filter_uniform_patches,  # <-- NEU
+            min_std_threshold=self.min_std_threshold,            # <-- NEU
+            do_patch_minmax=self.do_patch_minmax
         )
         loader = DataLoader(ds, batch_size=32, shuffle=False)
         all_embs = []
+
         self.base_cnn.eval()
         self.mil_agg.eval()
-
         with torch.no_grad():
-            for patch_t in loader:
+            for batch_idx, patch_t in enumerate(loader):
                 patch_t = patch_t.to(self.device)
+
+                # --- Debug: Zeige Min/Max pro Batch (1x) ---
+                # if batch_idx == 0:
+                #     logging.debug(f"[compute_emb] Patch shape={patch_t.shape}, "
+                #                   f"min={patch_t.min().item():.4f}, "
+                #                   f"max={patch_t.max().item():.4f}, "
+                #                   f"mean={patch_t.mean().item():.4f}")
+
                 emb = self.base_cnn(patch_t)  # => (B,512)
                 all_embs.append(emb)
 
         if len(all_embs) == 0:
             return torch.zeros((1,512), device=self.device)
 
-        patch_embs = torch.cat(all_embs, dim=0)  # => (N,512)
-        patient_emb = self.mil_agg(patch_embs)   # => (1,512)
+        patch_embs = torch.cat(all_embs, dim=0)
+        patient_emb = self.mil_agg(patch_embs)
         return patient_emb
 
-    # --------------------------------------
+    # --------------------------------------------------------------------------
     # _forward_patient (Training)
-    # --------------------------------------
+    # --------------------------------------------------------------------------
     def _forward_patient(self, pid, study_yr):
+        logging.debug(f"[_forward_patient] Start: pid={pid}, study_yr={study_yr}")
         ds = SinglePatientDataset(
             data_root=self.data_root,
             pid=pid,
             study_yr=study_yr,
             roi_size=self.roi_size,
-            overlap=self.overlap
+            overlap=self.overlap,
+            skip_slices=self.skip_slices,
+            skip_factor=self.skip_factor,
+            filter_empty_patches=self.filter_empty_patches,
+            min_nonzero_fraction=self.min_nonzero_fraction,
+            filter_uniform_patches=self.filter_uniform_patches,  # <-- NEU
+            min_std_threshold=self.min_std_threshold,            # <-- NEU
+            do_patch_minmax=self.do_patch_minmax
         )
+        logging.debug(f"[_forward_patient] ds length = {len(ds)} patches")
+
         loader = DataLoader(ds, batch_size=32, shuffle=False)
         patch_embs = []
+
         self.base_cnn.train()
         self.mil_agg.train()
 
-        for patch_t in loader:
+        for batch_idx, patch_t in enumerate(loader):
+            # logging.debug(f"[_forward_patient] batch_idx={batch_idx}, shape={patch_t.shape}")
+            # if patch_t.numel() > 0:
+            #     logging.debug(f"  Patch min={patch_t.min().item():.3f} max={patch_t.max().item():.3f}")
+            # else:
+            #     logging.debug("  Patch is empty?!")
+
             patch_t = patch_t.to(self.device)
-            emb = self.base_cnn(patch_t)  # => (B,512)
+
+            # --- Debug: Zeige Min/Max pro Batch (1x) ---
+            if batch_idx == 0:
+                logging.debug(f"[forward_patient] Patches shape={patch_t.shape}, "
+                              f"min={patch_t.min().item():.4f}, "
+                              f"max={patch_t.max().item():.4f}, "
+                              f"mean={patch_t.mean().item():.4f}")
+
+                # Extra: Visualisiere 1 Patch (optional, nur Debug)
+                if patch_t.ndim == 4:
+                    # patch_t: (B,C,H,W), nimm erst 1 Patch
+                    patch_0 = patch_t[0].cpu().numpy()
+                    # Optional: Erzeuge ein kleines PNG
+                    try:
+                        import matplotlib.pyplot as plt
+                        plt.figure()
+                        plt.imshow(patch_0[0,:,:], cmap='gray')
+                        plt.title("[debug] 1.Patch_0 (Ch=0)")
+                        plt.savefig("debug_patch_0.png", dpi=80)
+                        plt.close()
+                        logging.debug("Patch 0 Visualisierung -> debug_patch_0.png")
+                    except:
+                        pass
+
+            emb = self.base_cnn(patch_t)
             patch_embs.append(emb)
 
         if len(patch_embs) == 0:
+            logging.debug("[_forward_patient] WARNING: no patch_embs => returning dummy embedding.")
             return torch.zeros((1,512), device=self.device, requires_grad=True)
 
         patch_embs = torch.cat(patch_embs, dim=0)
-        patient_emb = self.mil_agg(patch_embs)  # => (1,512)
+        patient_emb = self.mil_agg(patch_embs)
         return patient_emb
 
-    # --------------------------------------
-    # train_one_epoch => Triplet-Loss
-    # --------------------------------------
+    # --------------------------------------------------------------------------
+    # train_one_epoch => Sampler => TripletLoss
+    # --------------------------------------------------------------------------
     def train_one_epoch(self, sampler):
+        logging.debug(f"[train_one_epoch] Starte Loop mit Sampler={sampler}")
         total_loss = 0.0
         steps = 0
         for step, (anchor_info, pos_info, neg_info) in enumerate(sampler):
-            anchor_pid, anchor_sy = anchor_info['pid'], anchor_info['study_yr']
-            pos_pid, pos_sy       = pos_info['pid'], pos_info['study_yr']
-            neg_pid, neg_sy       = neg_info['pid'], neg_info['study_yr']
+            a_pid, a_sy = anchor_info['pid'], anchor_info['study_yr']
+            p_pid, p_sy = pos_info['pid'], pos_info['study_yr']
+            n_pid, n_sy = neg_info['pid'], neg_info['study_yr']
 
-            anchor_emb = self._forward_patient(anchor_pid, anchor_sy)
-            pos_emb    = self._forward_patient(pos_pid, pos_sy)
-            neg_emb    = self._forward_patient(neg_pid, neg_sy)
+            anchor_emb = self._forward_patient(a_pid, a_sy)
+            pos_emb    = self._forward_patient(p_pid, p_sy)
+            neg_emb    = self._forward_patient(n_pid, n_sy)
 
             loss = self.triplet_loss_fn(anchor_emb, pos_emb, neg_emb)
-
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
@@ -229,13 +271,13 @@ class TripletTrainer(nn.Module):
             if step % 250 == 0:
                 logging.info(f"[Step {step}] Triplet Loss = {loss.item():.4f}")
 
-        avg_loss = total_loss / steps if steps > 0 else 0.0
+        avg_loss = total_loss / steps if steps>0 else 0.0
         logging.info(f"Epoch Loss = {avg_loss:.4f}")
         self.epoch_losses.append(avg_loss)
 
-    # --------------------------------------
-    # train_loop => Schleife (N Epochen)
-    # --------------------------------------
+    # --------------------------------------------------------------------------
+    # train_loop => N Epochen
+    # --------------------------------------------------------------------------
     def train_loop(self, num_epochs=2, num_triplets=100):
         sampler = TripletSampler(
             df=self.df,
@@ -243,16 +285,19 @@ class TripletTrainer(nn.Module):
             shuffle=True,
             top_k_negatives=3
         )
-        for epoch in range(1, num_epochs + 1):
+        for epoch in range(1, num_epochs+1):
             self.train_one_epoch(sampler)
+
+            # optional scheduler
             if self.scheduler is not None:
                 self.scheduler.step()
                 current_lr = self.scheduler.get_last_lr()[0]
                 logging.info(f"Nach Epoche {epoch}, LR={current_lr}")
+
             sampler.reset_epoch()
 
     # --------------------------------------------------------------------------
-    # train_with_val => Train + Val + Visualisierung
+    # train_with_val => Training + Validation
     # --------------------------------------------------------------------------
     def train_with_val(
         self,
@@ -266,16 +311,6 @@ class TripletTrainer(nn.Module):
         visualize_method='tsne',
         output_dir='plots'
     ):
-        """
-        Führt ein Training + Validierung durch.
-         - epochs Mal
-         - pro Epoche => train_loop(num_epochs=1)
-         - evaluate_model => (precision, recall, mAP)
-         - track best_val_map
-         - speichert Epochen-Loss => Plot am Ende
-         - optional: visualisiert Embeddings alle visualize_every Epochen
-         - speichert Metric-Kurven (Precision@K, Recall@K, mAP) am Ende
-        """
         self.best_val_map = 0.0
         self.best_val_epoch = -1
         self.epoch_losses = []
@@ -287,12 +322,12 @@ class TripletTrainer(nn.Module):
 
         df_val = pd.read_csv(val_csv)
 
-        for epoch in range(1, epochs + 1):
+        for epoch in range(1, epochs+1):
             logging.info(f"=== EPOCH {epoch}/{epochs} ===")
             # 1 Epoche train
             self.train_loop(num_epochs=1, num_triplets=num_triplets)
 
-            # Evaluate auf Val
+            # Evaluate => val
             val_metrics = evaluate_model(
                 trainer=self,
                 data_csv=val_csv,
@@ -301,27 +336,21 @@ class TripletTrainer(nn.Module):
                 distance_metric=distance_metric,
                 device=self.device
             )
-            current_precision = val_metrics['precision@K']
-            current_recall    = val_metrics['recall@K']
-            current_map       = val_metrics['mAP']
+            precisionK = val_metrics["precision@K"]
+            recallK    = val_metrics["recall@K"]
+            map_val    = val_metrics["mAP"]
 
-            logging.info(
-                f"Val-Epoch={epoch}: precision={current_precision:.4f}, "
-                f"recall={current_recall:.4f}, mAP={current_map:.4f}"
-            )
+            logging.info(f"Val-Epoch={epoch}: precision={precisionK:.4f}, recall={recallK:.4f}, mAP={map_val:.4f}")
 
-            # Speichere Metriken
-            self.metric_history["precision"].append(current_precision)
-            self.metric_history["recall"].append(current_recall)
-            self.metric_history["mAP"].append(current_map)
+            self.metric_history["precision"].append(precisionK)
+            self.metric_history["recall"].append(recallK)
+            self.metric_history["mAP"].append(map_val)
 
-            # Track Best
-            if current_map > self.best_val_map:
-                self.best_val_map = current_map
+            if map_val > self.best_val_map:
+                self.best_val_map = map_val
                 self.best_val_epoch = epoch
-                logging.info(f"=> New Best mAP={self.best_val_map:.4f} in Epoche {epoch}")
+                logging.info(f"=> New Best mAP={map_val:.4f} @ epoch={epoch}")
 
-            # Visualisierung => Embeddings
             if epoch % visualize_every == 0:
                 self.visualize_embeddings(
                     df=df_val,
@@ -331,21 +360,22 @@ class TripletTrainer(nn.Module):
                     output_dir=output_dir
                 )
 
-        # Am Ende => Plots generieren
         self.plot_loss_curve(output_dir=output_dir)
         self.plot_metric_curves(output_dir=output_dir)
 
         return (self.best_val_map, self.best_val_epoch)
 
     # --------------------------------------------------------------------------
-    # visualisieren der Embeddings => t-SNE oder PCA
+    # visualize_embeddings => t-SNE / PCA
     # --------------------------------------------------------------------------
-    def visualize_embeddings(self,
-                             df,
-                             data_root,
-                             method='tsne',
-                             epoch=0,
-                             output_dir='plots'):
+    def visualize_embeddings(
+        self,
+        df,
+        data_root,
+        method='tsne',
+        epoch=0,
+        output_dir='plots'
+    ):
         logging.info(f"Visualisiere Embeddings => {method.upper()}, EPOCH={epoch}")
         embeddings_list = []
         combos = []
@@ -354,199 +384,118 @@ class TripletTrainer(nn.Module):
             study_yr = row['study_yr']
             combo = row['combination']
 
-            emb = self.compute_patient_embedding(pid, study_yr)  # => (1,512)
+            emb = self.compute_patient_embedding(pid, study_yr)
             emb_np = emb.squeeze(0).detach().cpu().numpy()
             embeddings_list.append(emb_np)
             combos.append(combo)
 
-        embeddings_arr = np.array(embeddings_list)  # shape (N,512)
-
-        if method.lower() == 'tsne':
+        embeddings_arr = np.array(embeddings_list)
+        if method.lower()=='tsne':
             from sklearn.manifold import TSNE
             projector = TSNE(n_components=2, random_state=42)
         else:
             from sklearn.decomposition import PCA
             projector = PCA(n_components=2, random_state=42)
 
-        coords_2d = projector.fit_transform(embeddings_arr)  # shape (N,2)
+        coords_2d = projector.fit_transform(embeddings_arr)
 
         plt.figure(figsize=(8,6))
-        combos_unique = sorted(list(set(combos)))
-        for c in combos_unique:
-            idxs = [idx for idx, val in enumerate(combos) if val == c]
-            plt.scatter(
-                coords_2d[idxs, 0],
-                coords_2d[idxs, 1],
-                label=str(c),
-                alpha=0.6
-            )
+        unique_combos = sorted(list(set(combos)))
+        for c in unique_combos:
+            idxs = [ix for ix,val in enumerate(combos) if val==c]
+            plt.scatter(coords_2d[idxs,0], coords_2d[idxs,1], label=str(c), alpha=0.6)
 
         plt.title(f"{method.upper()} Embeddings - EPOCH={epoch}")
         plt.legend(loc='best')
 
         aggregator_name = getattr(self.mil_agg, '__class__').__name__
         timestamp = datetime.datetime.now().strftime("%m%d-%H%M")
-
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
-        filename = os.path.join(
+        fname = os.path.join(
             output_dir,
             f"Emb_{method}_{aggregator_name}_epoch{epoch:03d}_{timestamp}.png"
         )
-        plt.savefig(filename, dpi=150)
+        plt.savefig(fname, dpi=150)
         plt.close()
-        logging.info(f"Saved embedding plot: {filename}")
+        logging.info(f"Saved embedding plot: {fname}")
 
     # --------------------------------------------------------------------------
-    # plot_loss_curve => Speichert die Loss-Kurve als PNG
+    # plot_loss_curve => Speichert die Loss-Kurve
     # --------------------------------------------------------------------------
     def plot_loss_curve(self, output_dir='plots'):
-        """
-        Nutzt self.epoch_losses, um einen Loss-vs-Epoch Plot zu erstellen.
-        Speichert loss_vs_epoch.png in output_dir.
-        """
         if not self.epoch_losses:
-            logging.info("Keine epoch_losses vorhanden, überspringe plot_loss_curve.")
+            logging.info("Keine epoch_losses => skip plot_loss_curve.")
             return
-
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
-        epochs_range = list(range(1, len(self.epoch_losses)+1))
+        x_vals = list(range(1, len(self.epoch_losses)+1))
         plt.figure(figsize=(8,6))
-        plt.plot(epochs_range, self.epoch_losses, marker='o', label="Train Loss", color='navy')
-        plt.title("Progression of Training Loss per Epoch")
+        plt.plot(x_vals, self.epoch_losses, marker='o', color='navy', label='Train Loss')
+        plt.title("Train Loss pro Epoche")
         plt.xlabel("Epoch")
         plt.ylabel("Triplet Loss")
         plt.legend()
 
         aggregator_name = getattr(self.mil_agg, '__class__').__name__
-        timestamp = datetime.datetime.now().strftime("%m%d-%H%M")
-        filename = os.path.join(
-            output_dir,
-            f"loss_vs_epoch_{aggregator_name}_{timestamp}.png"
-        )
-        plt.savefig(filename, dpi=150)
+        timestr = datetime.datetime.now().strftime("%m%d-%H%M")
+        outname = os.path.join(output_dir, f"loss_vs_epoch_{aggregator_name}_{timestr}.png")
+        plt.savefig(outname, dpi=150)
         plt.close()
-        logging.info(f"Saved loss curve: {filename}")
+        logging.info(f"Saved loss curve: {outname}")
 
     # --------------------------------------------------------------------------
-    # plot_metric_curves => Plottet Precision, Recall, mAP vs Epochen
+    # plot_metric_curves => Precision, Recall, mAP vs Epoche
     # --------------------------------------------------------------------------
     def plot_metric_curves(self, output_dir='plots'):
-        """
-        Zeichnet Precision@K, Recall@K, mAP über die Epochen als Liniendiagramme.
-        Speichert sie gemeinsam in metrics_vs_epoch.png.
-        """
-        if len(self.metric_history["mAP"]) == 0:
-            logging.info("Keine Metric-History vorhanden, überspringe plot_metric_curves.")
+        if len(self.metric_history["mAP"])==0:
+            logging.info("Keine Metriken => skip plot_metric_curves.")
             return
-
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
-        epochs_range = list(range(1, len(self.metric_history["mAP"])+1))
+        x_vals = list(range(1, len(self.metric_history["mAP"])+1))
 
         plt.figure(figsize=(8,6))
-        plt.plot(
-            epochs_range,
-            self.metric_history["precision"],
-            marker='o',
-            label="Precision@K",
-            color='green'
-        )
-        plt.plot(
-            epochs_range,
-            self.metric_history["recall"],
-            marker='s',
-            label="Recall@K",
-            color='orange'
-        )
-        plt.plot(
-            epochs_range,
-            self.metric_history["mAP"],
-            marker='^',
-            label="mAP",
-            color='red'
-        )
-
-        plt.title("Progression of Precision@K, Recall@K, and mAP over Epochs")
+        plt.plot(x_vals, self.metric_history["precision"], 'g-o', label='Precision@K')
+        plt.plot(x_vals, self.metric_history["recall"], 'm-s', label='Recall@K')
+        plt.plot(x_vals, self.metric_history["mAP"], 'r-^', label='mAP')
+        plt.ylim(0,1)
+        plt.title("Precision@K, Recall@K, mAP vs Epoche")
         plt.xlabel("Epoch")
-        plt.ylabel("Metric Value")
-        plt.ylim(0, 1.0)
-        plt.legend(loc='best')
+        plt.ylabel("Value")
+        plt.legend()
 
         aggregator_name = getattr(self.mil_agg, '__class__').__name__
-        timestamp = datetime.datetime.now().strftime("%m%d-%H%M")
-        filename = os.path.join(
-            output_dir,
-            f"metrics_vs_epoch_{aggregator_name}_{timestamp}.png"
-        )
-
-        plt.savefig(filename, dpi=150)
+        timestr = datetime.datetime.now().strftime("%m%d-%H%M")
+        outname = os.path.join(output_dir, f"metrics_vs_epoch_{aggregator_name}_{timestr}.png")
+        plt.savefig(outname, dpi=150)
         plt.close()
-        logging.info(f"Saved metric curves: {filename}")
+        logging.info(f"Saved metric curves: {outname}")
 
     # --------------------------------------------------------------------------
     # save_checkpoint / load_checkpoint
     # --------------------------------------------------------------------------
     def save_checkpoint(self, path):
-        checkpoint = {
+        ckpt = {
             'base_cnn': self.base_cnn.state_dict(),
             'mil_agg': self.mil_agg.state_dict(),
             'optimizer': self.optimizer.state_dict()
         }
         if self.scheduler is not None:
-            checkpoint['scheduler'] = self.scheduler.state_dict()
-
-        torch.save(checkpoint, path)
-        logging.info(f"Checkpoint saved to {path}")
+            ckpt['scheduler'] = self.scheduler.state_dict()
+        torch.save(ckpt, path)
+        logging.info(f"Checkpoint saved => {path}")
 
     def load_checkpoint(self, path):
-        checkpoint = torch.load(path, map_location=self.device)
-        self.base_cnn.load_state_dict(checkpoint['base_cnn'])
-        self.mil_agg.load_state_dict(checkpoint['mil_agg'])
-        self.optimizer.load_state_dict(checkpoint['optimizer'])
-        if self.scheduler is not None and 'scheduler' in checkpoint:
-            self.scheduler.load_state_dict(checkpoint['scheduler'])
+        ckpt = torch.load(path, map_location=self.device)
+        self.base_cnn.load_state_dict(ckpt['base_cnn'])
+        self.mil_agg.load_state_dict(ckpt['mil_agg'])
+        self.optimizer.load_state_dict(ckpt['optimizer'])
+
+        if self.scheduler is not None and 'scheduler' in ckpt:
+            self.scheduler.load_state_dict(ckpt['scheduler'])
 
         logging.info(f"Checkpoint loaded from {path}")
-
-
-if __name__ == "__main__":
-    import logging
-    logging.basicConfig(level=logging.INFO)
-
-    # # Beispiel:
-    # data_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv"
-    # data_root = r"D:\thesis_robert\NLST_subset_v5_nifti_3mm_Voxel"
-    # df = pd.read_csv(data_csv)
-
-    # trainer = TripletTrainer(
-    #     aggregator_name="mil",
-    #     df=df,
-    #     data_root=data_root,
-    #     device='cuda',
-    #     lr=1e-4,
-    #     margin=1.0,
-    #     roi_size=(96,96,3),
-    #     overlap=(10,10,1),
-    #     pretrained=False,
-    #     attention_hidden_dim=128,
-    #     dropout=0.2,
-    #     weight_decay=1e-5
-    # )
-
-    # best_map, best_epoch = trainer.train_with_val(
-    #     epochs=5,
-    #     num_triplets=200,
-    #     val_csv=r"C:\...\nlst_subset_v5_validation.csv",
-    #     data_root_val=data_root,
-    #     K=5,
-    #     distance_metric='euclidean',
-    #     visualize_every=2,
-    #     visualize_method='pca',
-    #     output_dir='plots_example'
-    # )
-    # logging.info(f"Done. best_map={best_map:.4f} at epoch={best_epoch}")
