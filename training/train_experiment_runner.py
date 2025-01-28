@@ -67,21 +67,21 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     # Pfade definieren:
-    TRAIN_CSV = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv"
-    VAL_CSV   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv"
+    TRAIN_CSV = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\classification_test_02\training\nlst_subset_v5_2class_02_training.csv"
+    VAL_CSV   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\classification_test_02\training\nlst_subset_v5_2class_02_training.csv"
     DATA_ROOT = r"D:\thesis_robert\NLST_subset_v5_nifti_3mm_Voxel"
 
     # Liste von Experiment-Konfigurationen
     experiments = [
       {
-        "exp_name": "MMM_Exp34_mil",
+        "exp_name": "Exp35_mil_train",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
 
         "aggregator_name": "mil",
-        "epochs": 30,
-        "num_triplets": 1000,
+        "epochs": 20,
+        "num_triplets": 350,
         "lr": 1e-5,
         "margin": 1.0,
         "roi_size": (96,96,3),
