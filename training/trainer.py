@@ -50,7 +50,7 @@ class TripletTrainer(nn.Module):
         lr=1e-3,
         margin=1.0,
         roi_size=(96, 96, 3),
-        overlap=(10, 10, 1),
+        overlap=(10,10,1),
         pretrained=False,
         attention_hidden_dim=128,
         dropout=0.2,
@@ -65,7 +65,9 @@ class TripletTrainer(nn.Module):
         min_std_threshold=0.01,
         do_patch_minmax=False,
         # Hybrid-Loss
-        lambda_bce=1.0
+        lambda_bce=1.0,
+        # NEU: manueller Parameter für Augmentation im Training
+        do_augmentation_train=True
     ):
         super().__init__()
         self.df = df
@@ -83,6 +85,10 @@ class TripletTrainer(nn.Module):
         self.do_patch_minmax = do_patch_minmax
 
         self.lambda_bce = lambda_bce
+
+        # NEU: manuell gesteuert
+        self.do_augmentation_train = do_augmentation_train
+
 
         # (A) CNN-Backbone
         self.base_cnn = BaseCNN(
@@ -143,13 +149,17 @@ class TripletTrainer(nn.Module):
             f"skip_slices={skip_slices}, skip_factor={skip_factor}, "
             f"filter_empty_patches={filter_empty_patches}, min_nonzero_frac={min_nonzero_fraction}, "
             f"filter_uniform_patches={filter_uniform_patches}, min_std_threshold={min_std_threshold}, "
-            f"do_patch_minmax={do_patch_minmax}, lambda_bce={lambda_bce}"
+            f"do_patch_minmax={do_patch_minmax}, lambda_bce={lambda_bce}, "
+            f"do_augmentation_train={do_augmentation_train}"
         )
 
     # ---------------------------
     # _forward_patient => (emb, logits)
     # ---------------------------
     def _forward_patient(self, pid, study_yr):
+        """
+        => Nur beim Training. do_augmentation_train steuert Aug.
+        """
         ds = SinglePatientDataset(
             data_root=self.data_root,
             pid=pid,
@@ -162,8 +172,10 @@ class TripletTrainer(nn.Module):
             min_nonzero_fraction=self.min_nonzero_fraction,
             filter_uniform_patches=self.filter_uniform_patches,
             min_std_threshold=self.min_std_threshold,
-            do_patch_minmax=self.do_patch_minmax
+            do_patch_minmax=self.do_patch_minmax,
+            do_augmentation=self.do_augmentation_train  # <-- hier
         )
+
         loader = DataLoader(ds, batch_size=32, shuffle=False)
 
         self.base_cnn.train()
@@ -173,22 +185,22 @@ class TripletTrainer(nn.Module):
         patch_embs = []
         for patch_t in loader:
             patch_t = patch_t.to(self.device)
-            emb = self.base_cnn(patch_t)  # => (B,512)
+            emb = self.base_cnn(patch_t)
             patch_embs.append(emb)
 
-        if len(patch_embs) == 0:
+        if len(patch_embs)==0:
             dummy = torch.zeros((1,512), device=self.device, requires_grad=True)
-            dummy_logits = self.classifier(dummy)  # (1,3)
+            dummy_logits = self.classifier(dummy)
             return dummy, dummy_logits
 
-        patch_embs = torch.cat(patch_embs, dim=0)  # => (N,512)
-        patient_emb = self.mil_agg(patch_embs)      # => (1,512)
-        logits = self.classifier(patient_emb)       # => (1,3)
+        patch_embs = torch.cat(patch_embs, dim=0)
+        patient_emb = self.mil_agg(patch_embs)
+        logits = self.classifier(patient_emb)
         return patient_emb, logits
 
     def compute_patient_embedding(self, pid, study_yr):
         """
-        Für Evaluation: wir wollen NUR das Embedding (eval-mode).
+        => Validation / Test => do_augmentation=False
         """
         ds = SinglePatientDataset(
             data_root=self.data_root,
@@ -202,7 +214,8 @@ class TripletTrainer(nn.Module):
             min_nonzero_fraction=self.min_nonzero_fraction,
             filter_uniform_patches=self.filter_uniform_patches,
             min_std_threshold=self.min_std_threshold,
-            do_patch_minmax=self.do_patch_minmax
+            do_patch_minmax=self.do_patch_minmax,
+            do_augmentation=False  # Kein Aug. im Val/Test
         )
         loader = DataLoader(ds, batch_size=32, shuffle=False)
 
@@ -217,7 +230,7 @@ class TripletTrainer(nn.Module):
                 emb = self.base_cnn(patch_t)
                 all_embs.append(emb)
 
-        if len(all_embs) == 0:
+        if len(all_embs)==0:
             return torch.zeros((1,512), device=self.device)
 
         patch_embs = torch.cat(all_embs, dim=0)

@@ -44,6 +44,7 @@ def run_experiment(cfg):
         skip_factor=cfg["skip_factor"],
         filter_empty_patches=cfg["filter_empty_patches"],
         filter_uniform_patches=cfg["filter_uniform_patches"],
+        do_augmentation_train=cfg["do_augmentation_train"],
     )
 
     # Optional: Scheduler
@@ -83,7 +84,7 @@ def main():
     # Liste von Experiment-Konfigurationen
     experiments = [
       {
-        "exp_name": "Exp36_mil_multi",
+        "exp_name": "Exp38_mil_multi_aug_3mm",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
@@ -104,6 +105,7 @@ def main():
         "skip_factor": 2,
         "filter_empty_patches": False, 
         "filter_uniform_patches": False,
+        "do_augmentation_train": True,
       },
       # {
       #   "exp_name": "MMM_Exp30_mean_seg",
@@ -151,113 +153,6 @@ def main():
       #   "filter_empty_patches": False, 
       #   "filter_uniform_patches": True,
       # },
-      # {
-      #   "exp_name": "MMM_Exp32_mean_seg",
-      #   "train_csv": TRAIN_CSV,
-      #   "val_csv":   VAL_CSV,
-      #   "data_root": DATA_ROOT,
-
-      #   "aggregator_name": "mean",
-      #   "epochs": 40,
-      #   "num_triplets": 1000,
-      #   "lr": 1e-5,
-      #   "margin": 0.3,
-      #   "roi_size": (96,96,3),
-      #   "overlap": (10,10,1),
-      #   "attention_hidden_dim": 128,
-      #   "dropout": 0.2,
-      #   "weight_decay": 1e-8,
-      #   "use_scheduler": True, 
-      #   "freeze_blocks": [0],
-      #   "skip_slices": True,
-      #   "skip_factor": 3,
-      #   "filter_empty_patches": False, 
-      #   "filter_uniform_patches": True,
-      # },
-      # {
-      #   "exp_name": "MMM_Exp33_mil_seg",
-      #   "train_csv": TRAIN_CSV,
-      #   "val_csv":   VAL_CSV,
-      #   "data_root": DATA_ROOT,
-
-      #   "aggregator_name": "mil",
-      #   "epochs": 20,
-      #   "num_triplets": 1000,
-      #   "lr": 1e-6,
-      #   "margin": 0.7,
-      #   "roi_size": (96,96,3),
-      #   "overlap": (10,10,1),
-      #   "attention_hidden_dim": 256,
-      #   "dropout": 0.2,
-      #   "weight_decay": 1e-6,
-      #   "use_scheduler": True, 
-      #   "freeze_blocks": [0],
-      #   "skip_slices": True,
-      #   "skip_factor": 2,
-      #   "filter_empty_patches": False, 
-      #   "filter_uniform_patches": True,
-      # },
-      # {
-      #   "exp_name": "MMM_Exp34_mean_seg",
-      #   "train_csv": TRAIN_CSV,
-      #   "val_csv":   VAL_CSV,
-      #   "data_root": DATA_ROOT,
-
-      #   "aggregator_name": "mean",
-      #   "epochs": 30,
-      #   "num_triplets": 1000,
-      #   "lr": 1e-6,
-      #   "margin": 0.3,
-      #   "roi_size": (96,96,3),
-      #   "overlap": (10,10,1),
-      #   "attention_hidden_dim": 128,
-      #   "dropout": 0.2,
-      #   "weight_decay": 1e-8,
-      #   "use_scheduler": False, 
-      #   "freeze_blocks": [0],
-      #   "skip_slices": True,
-      #   "skip_factor": 0,
-      #   "filter_empty_patches": False, 
-      #   "filter_uniform_patches": True,
-      # }
-    #   {
-    #     "exp_name": "MMM_Exp27_mean_seg",
-    #     "train_csv": TRAIN_CSV,
-    #     "val_csv":   VAL_CSV,
-    #     "data_root": DATA_ROOT,
-
-    #     "aggregator_name": "mean",
-    #     "epochs": 20,
-    #     "num_triplets": 1000,
-    #     "lr": 1e-4,
-    #     "margin": 1.0,
-    #     "roi_size": (96,96,3),
-    #     "overlap": (10,10,1),
-    #     "attention_hidden_dim": 128,
-    #     "dropout": 0.2,
-    #     "weight_decay": 1e-4,
-    #     "use_scheduler": False,
-    #     "freeze_blocks": [0,1]
-    #   }, 
-    #   {
-    #     "exp_name": "MMM_Exp12_mil",
-    #     "train_csv": TRAIN_CSV,
-    #     "val_csv":   VAL_CSV,
-    #     "data_root": DATA_ROOT,
-
-    #     "aggregator_name": "mil",
-    #     "epochs": 30,
-    #     "num_triplets": 1000,
-    #     "lr": 1e-5,
-    #     "margin": 1.0,
-    #     "roi_size": (96,96,3),
-    #     "overlap": (10,10,1),
-    #     "attention_hidden_dim": 128,
-    #     "dropout": 0.2,
-    #     "weight_decay": 1e-4,
-    #     "use_scheduler": False,
-    #     "freeze_blocks": [0,1]
-    #   }      
     ]
 
     # CSV-Ausgabedatei

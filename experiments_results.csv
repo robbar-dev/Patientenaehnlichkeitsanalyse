@@ -1,1 +1,4 @@
 ExpName;Epochs;NumTriplets;LR;Aggregator;Margin;Dropout;WeightDecay;UseScheduler;FreezeBlocks;BestValMAP;BestEpoch;Timestamp
+Exp36_mil_multi;30;1000;1e-05;mil;1.0;0.2;0.0001;False;[0];0.15920424000873792;1;2025-01-28_19-02-56
+Exp36_mil_multi_vergleich;30;1000;1e-05;mil;1.0;0.2;0.0001;False;[0];0.2896494340723186;27;2025-01-28_22-55-37
+Exp37_mil_multi_aug_1_5mm;20;500;1e-05;mil;1.0;0.2;0.0001;False;[0];0.1599870534996887;5;2025-01-29_17-40-44
