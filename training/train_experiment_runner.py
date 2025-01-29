@@ -56,8 +56,9 @@ def run_experiment(cfg):
         )
 
     # 3) Train + Validate in einem Rutsch
-    best_map, best_epoch = trainer.train_with_val(
-        epochs=cfg["epochs"],
+    best_map, best_epoch = trainer.train_with_val_2stage(
+        epochs_stage1=cfg["epochs_stage1"],
+        epochs_stage2=cfg["epochs_stage2"],
         num_triplets=cfg["num_triplets"],
         val_csv=cfg["val_csv"],
         data_root_val=cfg["data_root"],
@@ -84,13 +85,14 @@ def main():
     # Liste von Experiment-Konfigurationen
     experiments = [
       {
-        "exp_name": "Exp38_mil_multi_aug_3mm",
+        "exp_name": "Exp39_mil_multi_aug_hard",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
 
         "aggregator_name": "mil",
-        "epochs": 30,
+        "epochs_stage1": 5,
+        "epochs_stage2": 25,
         "num_triplets": 1000,
         "lr": 1e-5,
         "margin": 1.0,
@@ -160,7 +162,7 @@ def main():
 
     # Header definieren
     csv_header = [
-        "ExpName", "Epochs", "NumTriplets", 
+        "ExpName", "EpochsStage1","EpochsStage2", "NumTriplets", 
         "LR", "Aggregator", "Margin", "Dropout", 
         "WeightDecay", "UseScheduler", "FreezeBlocks", 
         "BestValMAP", "BestEpoch", "Timestamp"
@@ -183,7 +185,8 @@ def main():
         now_str = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         row = [
             cfg["exp_name"],
-            cfg["epochs"],
+            cfg["epochs_stage1"],
+            cfg["epochs_stage2"],
             cfg["num_triplets"],
             cfg["lr"],
             cfg["aggregator_name"],

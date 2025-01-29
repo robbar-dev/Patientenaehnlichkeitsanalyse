@@ -21,6 +21,8 @@ from model.max_pooling import MaxPoolingAggregator
 from model.mean_pooling import MeanPoolingAggregator
 # 3) TripletSampler
 from training.triplet_sampler import TripletSampler
+# HardNegativeTripletSampler
+from training.triplet_sampler_hard_negativ import HardNegativeTripletSampler
 # 4) SinglePatientDataset
 from training.data_loader import SinglePatientDataset
 # 5) Evaluate-Funktionen (IR-Metriken)
@@ -247,16 +249,80 @@ class TripletTrainer(nn.Module):
         steps = 0
 
         for step, (anchor_info, pos_info, neg_info) in enumerate(sampler):
-            # Infos
             a_pid, a_sy = anchor_info['pid'], anchor_info['study_yr']
             p_pid, p_sy = pos_info['pid'], pos_info['study_yr']
             n_pid, n_sy = neg_info['pid'], neg_info['study_yr']
 
-            a_label = anchor_info['multi_label']  # z.B. [0,1,1]
+            a_label = anchor_info['multi_label']
             p_label = pos_info['multi_label']
             n_label = neg_info['multi_label']
 
-            # Forward
+            # Forward => Aug = True
+            a_emb, a_logits = self._forward_patient(a_pid, a_sy)
+            p_emb, p_logits = self._forward_patient(p_pid, p_sy)
+            n_emb, n_logits = self._forward_patient(n_pid, n_sy)
+
+            trip_loss = self.triplet_loss_fn(a_emb, p_emb, n_emb)
+
+            a_label_t = torch.tensor(a_label, dtype=torch.float32, device=self.device).unsqueeze(0)
+            p_label_t = torch.tensor(p_label, dtype=torch.float32, device=self.device).unsqueeze(0)
+            n_label_t = torch.tensor(n_label, dtype=torch.float32, device=self.device).unsqueeze(0)
+            bce_a = self.bce_loss_fn(a_logits, a_label_t)
+            bce_p = self.bce_loss_fn(p_logits, p_label_t)
+            bce_n = self.bce_loss_fn(n_logits, n_label_t)
+            bce_loss = (bce_a+bce_p+bce_n)/3.0
+
+            loss = trip_loss + self.lambda_bce*bce_loss
+
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            total_loss += loss.item()
+            total_trip += trip_loss.item()
+            total_bce  += bce_loss.item()
+            steps += 1
+
+            if step%250==0:
+                logging.info(f"[Step {step}] TotalLoss={loss.item():.4f}, Trip={trip_loss.item():.4f}, BCE={bce_loss.item():.4f}")
+
+        if steps>0:
+            avg_loss = total_loss/steps
+            avg_trip = total_trip/steps
+            avg_bce  = total_bce/steps
+        else:
+            avg_loss=0; avg_trip=0; avg_bce=0
+
+        logging.info(f"Epoch Loss={avg_loss:.4f}, Trip={avg_trip:.4f}, BCE={avg_bce:.4f}")
+        self.epoch_losses.append(avg_loss)
+        self.epoch_triplet_losses.append(avg_trip)
+        self.epoch_bce_losses.append(avg_bce)
+
+
+    # ---------------------------
+    # train_one_epoch_internal for Hard Negatives
+    # ---------------------------
+
+    def _train_one_epoch_internal(self, sampler):
+        """
+        Hilfsfunktion, damit wir DRY (don't repeat yourself) haben.
+        Identisch zu deiner train_one_epoch, nur wir
+        übernehmen sampler per Parameter.
+        """
+        total_loss = 0.0
+        total_trip = 0.0
+        total_bce  = 0.0
+        steps = 0
+
+        for step, (anchor_info, pos_info, neg_info) in enumerate(sampler):
+            a_pid, a_sy = anchor_info['pid'], anchor_info['study_yr']
+            p_pid, p_sy = pos_info['pid'], pos_info['study_yr']
+            n_pid, n_sy = neg_info['pid'], neg_info['study_yr']
+
+            a_label = anchor_info['multi_label']
+            p_label = pos_info['multi_label']
+            n_label = neg_info['multi_label']
+
             a_emb, a_logits = self._forward_patient(a_pid, a_sy)
             p_emb, p_logits = self._forward_patient(p_pid, p_sy)
             n_emb, n_logits = self._forward_patient(n_pid, n_sy)
@@ -265,6 +331,7 @@ class TripletTrainer(nn.Module):
             trip_loss = self.triplet_loss_fn(a_emb, p_emb, n_emb)
 
             # BCE-Loss
+            import torch
             a_label_t = torch.tensor(a_label, dtype=torch.float32, device=self.device).unsqueeze(0)
             p_label_t = torch.tensor(p_label, dtype=torch.float32, device=self.device).unsqueeze(0)
             n_label_t = torch.tensor(n_label, dtype=torch.float32, device=self.device).unsqueeze(0)
@@ -285,8 +352,8 @@ class TripletTrainer(nn.Module):
             total_bce  += bce_loss.item()
             steps += 1
 
-            if step % 250 == 0:
-                logging.info(f"[Step {step}] TotalLoss={loss.item():.4f}  Triplet={trip_loss.item():.4f}  BCE={bce_loss.item():.4f}")
+            if step % 250==0:
+                logging.info(f"[Step {step}] TotalLoss={loss.item():.4f}, Trip={trip_loss.item():.4f}, BCE={bce_loss.item():.4f}")
 
         if steps>0:
             avg_loss = total_loss/steps
@@ -295,23 +362,25 @@ class TripletTrainer(nn.Module):
         else:
             avg_loss=0; avg_trip=0; avg_bce=0
 
-        logging.info(f"Epoch Loss = {avg_loss:.4f} (Trip={avg_trip:.4f}, BCE={avg_bce:.4f})")
-
-        # Speichern
+        logging.info(f"Epoch Loss={avg_loss:.4f}, Trip={avg_trip:.4f}, BCE={avg_bce:.4f}")
         self.epoch_losses.append(avg_loss)
         self.epoch_triplet_losses.append(avg_trip)
         self.epoch_bce_losses.append(avg_bce)
+
 
     # ---------------------------
     # train_loop
     # ---------------------------
     def train_loop(self, num_epochs=2, num_triplets=100):
-        sampler = TripletSampler(
+        sampler = HardNegativeTripletSampler(
             df=self.df,
+            trainer=self,           
             num_triplets=num_triplets,
-            shuffle=True,
-            top_k_negatives=3
+            device=self.device
         )
+
+        self.train_one_epoch(sampler)
+
         for epoch in range(1, num_epochs+1):
             self.train_one_epoch(sampler)
 
@@ -417,7 +486,158 @@ class TripletTrainer(nn.Module):
         self.plot_multilabel_f1_curves(output_dir=output_dir)
 
         return (self.best_val_map, self.best_val_epoch)
+    
 
+    # ---------------------------
+    # train_with_val_2stage for Hard Negatives
+    # ---------------------------
+
+    def train_with_val_2stage(
+        self,
+        epochs_stage1,
+        epochs_stage2,
+        num_triplets,
+        val_csv,
+        data_root_val,
+        K=10,
+        distance_metric='euclidean',
+        visualize_every=5,
+        visualize_method='tsne',
+        output_dir='plots'
+    ):
+        # Lade df_val NUR für Multi-Label-F1 => in Python-Variable
+        df_val = pd.read_csv(val_csv)  
+        # (So hast du df_val, um z.B. self.evaluate_multilabel_classification(df_val, ...))
+
+        # Reset Tracking
+        self.best_val_map = 0.0
+        self.best_val_epoch = -1
+        self.epoch_losses = []
+        self.epoch_triplet_losses = []
+        self.epoch_bce_losses = []
+        self.metric_history = {"precision": [], "recall": [], "mAP": []}
+        self.multilabel_history = {"fibrose_f1": [], "emphysem_f1": [], "nodule_f1": [], "macro_f1": []}
+
+        total_epochs = epochs_stage1 + epochs_stage2
+        current_epoch = 0
+
+        # 1) Stage1 => normal Sampler
+        normal_sampler = TripletSampler(df=self.df, num_triplets=num_triplets, shuffle=True, top_k_negatives=3)
+
+        for e in range(1, epochs_stage1+1):
+            current_epoch += 1
+            logging.info(f"=== STAGE1-Epoch {current_epoch}/{total_epochs} ===")
+            self._train_one_epoch_internal(normal_sampler)
+            normal_sampler.reset_epoch()
+
+            # Evaluate (IR) + Multi-Label
+            self._evaluate_and_visualize(
+                current_epoch=current_epoch,
+                total_epochs=total_epochs,
+                val_csv=val_csv,            # <--- CSV-Pfad hier übergeben
+                df_val=df_val,             # <--- eingelesenes DF
+                data_root_val=data_root_val,
+                K=K,
+                distance_metric=distance_metric,
+                visualize_every=visualize_every,
+                visualize_method=visualize_method,
+                output_dir=output_dir
+            )
+
+        # 2) Stage2 => HardNegative
+        for e in range(1, epochs_stage2+1):
+            current_epoch += 1
+            logging.info(f"=== STAGE2-Epoch {current_epoch}/{total_epochs} ===")
+
+            if (e % 3) == 1:
+                hard_sampler = HardNegativeTripletSampler(
+                    df=self.df,
+                    trainer=self,
+                    num_triplets=num_triplets,
+                    device=self.device
+                )
+            self._train_one_epoch_internal(hard_sampler)
+            # Hard Neg Sampler => evtl. kein reset_epoch()
+
+            # Evaluate (IR) + Multi-Label
+            self._evaluate_and_visualize(
+                current_epoch=current_epoch,
+                total_epochs=total_epochs,
+                val_csv=val_csv,      # Pfad, NICHT df_val
+                df_val=df_val,
+                data_root_val=data_root_val,
+                K=K,
+                distance_metric=distance_metric,
+                visualize_every=visualize_every,
+                visualize_method=visualize_method,
+                output_dir=output_dir
+            )
+
+        self.plot_loss_components(output_dir=output_dir)
+        self.plot_metric_curves(output_dir=output_dir)
+        self.plot_multilabel_f1_curves(output_dir=output_dir)
+
+        return self.best_val_map, self.best_val_epoch
+
+
+    def _evaluate_and_visualize(
+        self,
+        current_epoch,
+        total_epochs,
+        val_csv,        # Pfad zur CSV für IR-Auswertung
+        df_val,         # eingelesenes DF für Multi-Label
+        data_root_val,
+        K=10,
+        distance_metric='euclidean',
+        visualize_every=5,
+        visualize_method='tsne',
+        output_dir='plots'
+    ):
+
+        # 1) IR-Metrik => evaluate_model => Pfad
+        # => Löst pd.read_csv(val_csv) in evaluate_model
+        val_metrics = evaluate_model(
+            trainer=self,
+            data_csv=val_csv,   # WICHTIG: Pfad, NICHT df_val
+            data_root=data_root_val,
+            K=K,
+            distance_metric=distance_metric,
+            device=self.device
+        )
+        precisionK = val_metrics["precision@K"]
+        recallK    = val_metrics["recall@K"]
+        map_val    = val_metrics["mAP"]
+
+        logging.info(f"Val-Epoch={current_epoch}: precision={precisionK:.4f}, recall={recallK:.4f}, mAP={map_val:.4f}")
+        self.metric_history["precision"].append(precisionK)
+        self.metric_history["recall"].append(recallK)
+        self.metric_history["mAP"].append(map_val)
+
+        # Track best IR-mAP
+        if map_val>self.best_val_map:
+            self.best_val_map = map_val
+            self.best_val_epoch = current_epoch
+            logging.info(f"=> New Best mAP={map_val:.4f} @ epoch={current_epoch}")
+
+        # 2) Multi-Label (F1) => Already have df_val
+        # => compute F1 etc.
+        multilabel_results = self.evaluate_multilabel_classification(df_val, data_root_val, threshold=0.5)
+        logging.info(f"Multi-Label => {multilabel_results}")
+
+        self.multilabel_history["fibrose_f1"].append(multilabel_results["fibrose_f1"])
+        self.multilabel_history["emphysem_f1"].append(multilabel_results["emphysem_f1"])
+        self.multilabel_history["nodule_f1"].append(multilabel_results["nodule_f1"])
+        self.multilabel_history["macro_f1"].append(multilabel_results["macro_f1"])
+
+        # 3) Visualisieren
+        if current_epoch % visualize_every==0:
+            self.visualize_embeddings(
+                df=df_val,            # Falls du fürs Label-Farbschema df_val brauchst
+                data_root=data_root_val,
+                method=visualize_method,
+                epoch=current_epoch,
+                output_dir=output_dir
+            )
 
     # ---------------------------
     # Multi-Label Evaluate
