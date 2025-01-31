@@ -40,10 +40,6 @@ def random_augment_2d(patch_t, p_flip=0.5, p_rot=0.5):
     return patch_t
 
 class SinglePatientDataset(data.Dataset):
-    """
-    Erzeugt 2D/3D-Patches aus einem NIfTI-Volume.
-    - do_augmentation steuert, ob random_augment_2d aufgerufen wird
-    """
     def __init__(
         self,
         data_root,
@@ -58,7 +54,7 @@ class SinglePatientDataset(data.Dataset):
         filter_uniform_patches=False,
         min_std_threshold=0.01,
         do_patch_minmax=False,
-        do_augmentation=False  # standard=False => Augmentation aus
+        do_augmentation=True 
     ):
         super().__init__()
         self.data_root = data_root
