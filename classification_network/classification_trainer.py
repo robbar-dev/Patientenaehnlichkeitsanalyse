@@ -19,10 +19,7 @@ import numpy as np
 
 def combo_to_label(combo_str):
     """
-    Ordnet den 3 relevanten Kombinationen => Label {0,1,2}
-    '1-0-0' => label=0
-    '0-1-0' => label=1
-    '0-0-1' => label=2
+    Wandelt die Strings '1-0-0','0-1-0','0-0-1' in int {0,1,2} um.
     """
     if combo_str == "1-0-0":
         return 0
@@ -31,15 +28,16 @@ def combo_to_label(combo_str):
     elif combo_str == "0-0-1":
         return 2
     else:
-        # Falls wir nicht in den 3-Klassen-Fall sind => None
+        # Falls es doch andere Combos gibt => None oder Exception
         return None
 
 class ClassificationTrainer(nn.Module):
     """
-    Einfache 3-Klassen-Klassifikation: combos { '1-0-0','0-1-0','0-0-1' } => label in {0,1,2}.
-    - CNN + Aggregator => (1,512)
-    - linear => (1,3)
-    - CrossEntropy
+    Einfache 3-Klassen-Klassifikation für combination in {'1-0-0','0-1-0','0-0-1'}.
+    Aufbau:
+     - CNN (ResNet18) + Aggregator => (1,512)
+     - classifier => (1,3)
+     - CrossEntropy => 3-Klassen-Task
     """
 
     def __init__(
@@ -60,7 +58,7 @@ class ClassificationTrainer(nn.Module):
         do_augmentation_train=True
     ):
         super().__init__()
-        self.df = df.copy()
+        self.df = df.copy()  # Hier wird kein 'cls_label' mehr erzeugt
         self.data_root = data_root
         self.device = device
         self.roi_size = roi_size
@@ -75,16 +73,7 @@ class ClassificationTrainer(nn.Module):
         self.do_patch_minmax = do_patch_minmax
         self.do_augmentation_train = do_augmentation_train
 
-        # Filter df => nur combos=1-0-0,0-1-0,0-0-1
-        valid_combos = {"1-0-0","0-1-0","0-0-1"}
-        self.df = self.df[self.df["combination"].isin(valid_combos)].copy()
-        # Mapping => label
-        self.df["cls_label"] = self.df["combination"].apply(combo_to_label)
-        # Filter rows where label=None
-        self.df = self.df.dropna(subset=["cls_label"])
-        self.df["cls_label"] = self.df["cls_label"].astype(int)
-
-        # (A) CNN
+        # (A) CNN (ResNet18 ohne Pretrained)
         self.base_cnn = BaseCNN(model_name='resnet18', pretrained=False).to(device)
 
         # (B) Aggregator => MeanPooling
@@ -102,20 +91,21 @@ class ClassificationTrainer(nn.Module):
 
         self.scheduler = None
 
-        # Tracking
+        # Tracking-Listen
         self.epoch_losses = []
-        self.epoch_train_acc = []  # train-acc each epoch
-        self.epoch_val_acc = []    # val-acc every 5 epoch or so
+        self.epoch_train_acc = [] 
+        self.epoch_val_acc = []    
 
-        logging.info(f"[ClassificationTrainer] 3-Klassen Setup => combos in {valid_combos}")
+        # Optionales Logging
+        logging.info("[ClassificationTrainer] Setup for combos in {'1-0-0','0-1-0','0-0-1'}")
 
     # --------------------------------------------------------------------------
     # forward => train
     # --------------------------------------------------------------------------
     def _forward_patient(self, pid, study_yr):
         """
-        Holt Patches => CNN => aggregator => => (1,512) => classifier => (1,3) => logits
-        => returns logits shape(1,3)
+        Patches => CNN => aggregator => => (1,512) => classifier => (1,3) => logits
+        returns logits shape(1,3)
         """
         ds = SinglePatientDataset(
             data_root=self.data_root,
@@ -145,9 +135,9 @@ class ClassificationTrainer(nn.Module):
             patch_embs.append(emb)
 
         if len(patch_embs)==0:
-            # leeres Volume => dummy
+            # Leeres Volume => dummy
             dummy = torch.zeros((1,512), device=self.device, requires_grad=True)
-            logits = self.classifier(dummy) # => shape(1,3)
+            logits = self.classifier(dummy) 
             return logits
 
         patch_embs = torch.cat(patch_embs, dim=0)  # => (N,512)
@@ -160,7 +150,7 @@ class ClassificationTrainer(nn.Module):
     # --------------------------------------------------------------------------
     def compute_patient_logits_eval(self, pid, study_yr):
         """
-        -> eval-mode => no augmentation
+        -> eval-mode => do_augmentation=False
         """
         ds = SinglePatientDataset(
             data_root=self.data_root,
@@ -198,16 +188,17 @@ class ClassificationTrainer(nn.Module):
         patch_embs = torch.cat(patch_embs, dim=0)
         patient_emb = self.aggregator(patch_embs)
         logits = self.classifier(patient_emb)
-        return logits  # => shape(1,3)
+        return logits 
 
     # --------------------------------------------------------------------------
     # train_loop
     # --------------------------------------------------------------------------
     def train_loop(self, num_epochs=10, df_val=None):
         """
-        train df => shuffle => batch=1 patient => forward => crossent => step
-        => at end epoch => compute train acc
-        => alle 5 epoche => compute val acc (falls df_val != None)
+        Training: iteriere patient-weise durch self.df
+        => label aus row["combination"] => int
+        => crossent
+        => optional alle 5 Epoche => val
         """
         df_patients = self.df.sample(frac=1.0).reset_index(drop=True)
 
@@ -217,15 +208,16 @@ class ClassificationTrainer(nn.Module):
             correct = 0
             total = 0
 
-            # --- TRAIN: go over train df ---
+            # --- TRAIN pro Patient ---
             for i, row in df_patients.iterrows():
                 pid = row['pid']
-                sy = row['study_yr']
-                label = int(row['cls_label'])  # 0..2
+                sy  = row['study_yr']
+                # label on-the-fly
+                label_str = row['combination']  # z. B. "1-0-0"
+                label = combo_to_label(label_str)  # => 0,1,2
 
-                logits = self._forward_patient(pid, sy)  # => shape(1,3)
-                # crossent
-                target = torch.tensor([label], dtype=torch.long, device=self.device)  # shape(1,)
+                logits = self._forward_patient(pid, sy) 
+                target = torch.tensor([label], dtype=torch.long, device=self.device) 
                 loss = self.ce_loss_fn(logits, target)
 
                 self.optimizer.zero_grad()
@@ -236,7 +228,7 @@ class ClassificationTrainer(nn.Module):
                 steps += 1
 
                 # Quick train-acc
-                _, pred_cls = torch.max(logits, dim=1)   # => (1,)
+                _, pred_cls = torch.max(logits, dim=1) 
                 if pred_cls.item() == label:
                     correct += 1
                 total += 1
@@ -249,8 +241,8 @@ class ClassificationTrainer(nn.Module):
 
             msg = f"[Epoch {epoch}] CE-Loss={avg_loss:.4f}, train_acc={train_acc*100:.2f}%"
 
-            # --- optional: VALIDATION ACC alle 5 Epoche ---
-            if df_val is not None and (epoch % 5 == 0):
+            # ---  optional: Validation ---
+            if df_val is not None and (epoch % 1 == 0):
                 val_loss, val_acc = self.eval_on_df(df_val)
                 self.epoch_val_acc.append(val_acc)
                 msg += f", val_acc={val_acc*100:.2f}%"
@@ -258,11 +250,12 @@ class ClassificationTrainer(nn.Module):
             logging.info(msg)
 
     # --------------------------------------------------------------------------
-    # eval_on_df => returns loss,acc
+    # eval_on_df => returns (val_loss, val_acc)
     # --------------------------------------------------------------------------
     def eval_on_df(self, df_eval):
         """
         Einfache Evaluierung => ACC
+        => label => combo_to_label
         """
         correct = 0
         total = 0
@@ -276,19 +269,21 @@ class ClassificationTrainer(nn.Module):
         with torch.no_grad():
             for i, row in df_eval.iterrows():
                 pid = row['pid']
-                sy = row['study_yr']
-                label = int(row['cls_label'])
+                sy  = row['study_yr']
+                # label => aus 'combination'
+                label_str = row['combination']
+                label = combo_to_label(label_str)
 
                 logits = self.compute_patient_logits_eval(pid, sy)
                 target = torch.tensor([label], dtype=torch.long, device=self.device)
                 loss = self.ce_loss_fn(logits, target)
                 total_loss += loss.item()
-                steps+=1
+                steps += 1
 
                 _, pred_cls = torch.max(logits, dim=1)
                 if pred_cls.item() == label:
-                    correct+=1
-                total+=1
+                    correct += 1
+                total += 1
 
         avg_loss = total_loss/steps if steps>0 else 0
         acc = correct/total if total>0 else 0
@@ -300,59 +295,67 @@ class ClassificationTrainer(nn.Module):
     def plot_loss_acc(self):
         """
         Zeichnet:
-         1) den Verlauf des CrossEntropy-Loss => cls_loss.png
-         2) den Verlauf der TRAIN-Accuracy => cls_train_acc.png
-         3) den Verlauf der VAL-Accuracy => cls_val_acc.png (nur alle 5 Epochen => also length<=> E/5)
+        1) den Verlauf des CrossEntropy-Loss => cls_loss.png
+        2) den Verlauf der TRAIN-Accuracy => cls_train_acc.png
+        3) den Verlauf der VAL-Accuracy => cls_val_acc.png (nur für epoche=5,10,15,...)
         """
+        import os
+        import matplotlib.pyplot as plt
+
         if not self.epoch_losses:
             logging.info("Keine epoch_losses => skip plot_loss_acc.")
             return
 
-        import os
-        import matplotlib.pyplot as plt
-        import numpy as np
-
         if not os.path.exists("plots_cls"):
             os.makedirs("plots_cls")
 
-        # --- 1) Loss Plot ---
-        epochs_range = range(1, len(self.epoch_losses)+1)
-        plt.figure(figsize=(6,5))
+        epochs_range = list(range(1, len(self.epoch_losses) + 1))
+        x_ticks = list(range(5, len(self.epoch_losses) + 1, 5))  # X-Achse startet bei 5
+
+        # --- (1) Loss Plot ---
+        plt.figure(figsize=(6, 5))
         plt.plot(epochs_range, self.epoch_losses, 'r-o', label='CE-Loss')
         plt.title("Train Loss")
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
+        plt.xticks(x_ticks)  # X-Achse startet direkt bei 5
+        plt.xlim(1, len(self.epoch_losses))  # Sicherstellen, dass es bei 1 startet
         plt.legend()
         out_loss = os.path.join("plots_cls", "cls_loss.png")
         plt.savefig(out_loss, dpi=150)
         plt.close()
         logging.info(f"Saved Loss Plot => {out_loss}")
 
-        # --- 2) TRAIN Accuracy Plot ---
-        if len(self.epoch_train_acc)>0:
-            plt.figure(figsize=(6,5))
-            plt.plot(epochs_range, self.epoch_train_acc, 'b-s', label='Train Accuracy')
-            plt.title("Train Accuracy vs Epoch")
-            plt.xlabel("Epoch")
-            plt.ylabel("Accuracy")
-            plt.ylim(0,1)
-            plt.legend()
-            out_train_acc = os.path.join("plots_cls", "cls_train_acc.png")
-            plt.savefig(out_train_acc, dpi=150)
-            plt.close()
-            logging.info(f"Saved Train Accuracy Plot => {out_train_acc}")
+        # --- (2) TRAIN Accuracy ---
+        plt.figure(figsize=(6, 5))
+        plt.plot(epochs_range, self.epoch_train_acc, 'b-s', label='Train Accuracy')
+        plt.title("Train Accuracy")
+        plt.xlabel("Epoch")
+        plt.ylabel("Accuracy")
+        plt.xticks(x_ticks)  # X-Achse startet direkt bei 5
+        plt.xlim(1, len(self.epoch_train_acc))  # Sicherstellen, dass es bei 1 startet
+        plt.ylim(0, 1)
+        plt.legend()
+        out_train_acc = os.path.join("plots_cls", "cls_train_acc.png")
+        plt.savefig(out_train_acc, dpi=150)
+        plt.close()
+        logging.info(f"Saved Train Accuracy Plot => {out_train_acc}")
 
-        # --- 3) VAL Accuracy Plot ---
-        val_epochs = [5 * i for i in range(1, len(self.epoch_val_acc)+1)]
-        if len(self.epoch_val_acc)>0:
-            plt.figure(figsize=(6,5))
-            plt.plot(val_epochs, self.epoch_val_acc, 'g-o', label='Val Accuracy (every 5 ep)')
-            plt.title("Validation Accuracy vs Epoch")
+        # --- (3) VAL Accuracy ---
+        if self.epoch_val_acc:
+            val_epochs = list(range(1, len(self.epoch_val_acc) + 1))
+            plt.figure(figsize=(6, 5))
+            plt.plot(val_epochs, self.epoch_val_acc, 'g-o', label='Validation Accuracy')
+            plt.title("Validation Accuracy")
             plt.xlabel("Epoch")
             plt.ylabel("Accuracy")
-            plt.ylim(0,1)
+            plt.xticks(x_ticks)  # X-Achse startet direkt bei 5
+            plt.xlim(1, len(self.epoch_train_acc))  # Sicherstellen, dass es bei 1 startet
+            plt.ylim(0, 1)
             plt.legend()
             out_val_acc = os.path.join("plots_cls", "cls_val_acc.png")
             plt.savefig(out_val_acc, dpi=150)
             plt.close()
             logging.info(f"Saved Val Accuracy Plot => {out_val_acc}")
+
+
