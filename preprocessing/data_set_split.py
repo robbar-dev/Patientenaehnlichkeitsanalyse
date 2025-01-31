@@ -79,10 +79,10 @@ def split_csv_balanced(
           f"  Test:  {len(df_test)} Zeilen")
 
 if __name__ == "__main__":
-    input_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\classification_test_02\nlst_subset_v5_2classes_02.csv"
-    out_train = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\classification_test_02\training\nlst_subset_v5_2class_02_training.csv"
-    out_val   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\classification_test_02\val\nlst_subset_v5_2class_02_val.csv"
-    out_test  = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\classification_test_02\test\nlst_subset_v5_2class_02_test.csv"
+    input_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\test_dataset_classification\v1\dataset_test_01.csv"
+    out_train = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\test_dataset_classification\v1\training\dataset_test_01_training.csv"
+    out_val   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\test_dataset_classification\v1\val\dataset_test_01_val.csv"
+    out_test  = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\test_dataset_classification\v1\test\dataset_test_01_test.csv"
 
     split_csv_balanced(
         input_csv=input_csv,

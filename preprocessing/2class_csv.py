@@ -3,19 +3,19 @@ import pandas as pd
 def main():
     """
     Dieses Skript filtert Deine große CSV (mit 7 Kombinationen)
-    auf nur 2 Klassen: '0-0-1' vs '0-1-0'.
+    auf Klassen: z.B.: '0-0-1' vs '0-1-0'.
 
-    Resultat: '2class_subset.csv' mit diesen beiden Klassen.
+    Resultat: csv mit angegeben Klassen
     """
     # 1) Pfade anpassen
     original_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\nlst_subset_v5.csv"
-    output_csv   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\classification_test_02\nlst_subset_v5_2classes_02.csv"
+    output_csv   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\test_dataset_classification\v1\dataset_test_01.csv"
 
     # 2) Lies original CSV
     df = pd.read_csv(original_csv)
 
     # 3) Filter auf die 2 Klassen
-    target_classes = ['0-0-1', '1-0-0']
+    target_classes = ['0-0-1', '1-0-0', '0-1-0']
     df_2classes = df[df['combination'].isin(target_classes)]
 
     # 4) Falls Balancierung, checke Class-Count    
