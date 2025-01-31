@@ -549,7 +549,7 @@ class TripletTrainer(nn.Module):
             current_epoch += 1
             logging.info(f"=== STAGE2-Epoch {current_epoch}/{total_epochs} ===")
 
-            if (e % 3) == 1:
+            if (e % 5) == 1:
                 hard_sampler = HardNegativeTripletSampler(
                     df=self.df,
                     trainer=self,
