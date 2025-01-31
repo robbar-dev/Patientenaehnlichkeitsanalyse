@@ -17,7 +17,7 @@ def main():
     # Pfade zu deinen CSVs (nur 3 Kombinationen enthalten)
     TRAIN_CSV = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\test_dataset_classification\v1\training\dataset_test_01_training.csv"
     VAL_CSV   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\test_dataset_classification\v1\val\dataset_test_01_val.csv"
-    DATA_ROOT = r"D:\thesis_robert\NLST_subset_v5_nifti_3mm_Voxel"
+    DATA_ROOT = r"D:\thesis_robert\NLST_subset_v5_nifti_1_5mm_Voxel"
 
     # 1) CSV laden
     df_train = pd.read_csv(TRAIN_CSV)
