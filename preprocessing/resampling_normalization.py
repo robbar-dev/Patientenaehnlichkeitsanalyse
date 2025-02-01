@@ -12,6 +12,7 @@ from monai.transforms import (
     Rotate90d,
     Spacingd,
     ScaleIntensityRanged,
+    AdjustContrastd,
     EnsureTyped,
     Compose,
 )
@@ -32,7 +33,10 @@ def resample_and_normalize(
     interpolation="trilinear",
     visualize=False,
     batch_size=4,
-    num_workers=8
+    num_workers=8,
+    a_min=-950,  # Feinanpassung für Emphyseme
+    a_max=-500,  # Kontraste besser sichtbar
+    gamma=1.5    # Erhöht den Kontrast
 ):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -57,10 +61,11 @@ def resample_and_normalize(
         Spacingd(keys=["image"], pixdim=target_spacing, mode=interpolation),
         ScaleIntensityRanged(
             keys=["image"],
-            a_min=-1000, a_max=400,
+            a_min=a_min, a_max=a_max,  # Angepasste Normalisierung für Emphyseme
             b_min=0.0, b_max=1.0,
             clip=True
         ),
+        AdjustContrastd(keys=["image"], gamma=gamma),  # Kontrastanpassung
         EnsureTyped(keys=["image"], data_type="tensor")
     ])
 
@@ -77,49 +82,8 @@ def resample_and_normalize(
         print(f"Warnung: Keine NIfTI-Dateien im Verzeichnis {input_dir} gefunden.")
         return
 
-    # Liste der bereits verarbeiteten Dateien erstellen
-    processed_filenames = set(os.listdir(output_dir))
-    # Falls die Ausgabedateien die gleiche Erweiterung haben wie die Eingabedateien
-    processed_files = set()
-    for fname in processed_filenames:
-        if fname.endswith(".nii") or fname.endswith(".nii.gz"):
-            processed_files.add(fname)
-
-    # Vorverarbeitung der Dateiliste: Überprüfen und Entfernen fehlerhafter und bereits verarbeiteter Dateien
-    valid_nifti_files = []
-    invalid_files = []
-    skipped_files = []
-    for file_dict in nifti_files:
-        file_path = file_dict["image"]
-        filename = os.path.basename(file_path)
-        output_file_path = os.path.join(output_dir, filename)
-
-        # Überprüfen, ob die Ausgabedatei bereits existiert
-        if filename in processed_files:
-            print(f"Datei {filename} bereits verarbeitet. Überspringe...")
-            logging.info(f"Datei {filename} bereits verarbeitet. Überspringe...")
-            skipped_files.append(filename)
-            continue
-
-        try:
-            # Versuch, die Datei mit nibabel zu laden
-            nib.load(file_path)
-            valid_nifti_files.append(file_dict)
-        except Exception as e:
-            print(f"Fehler beim Laden der Datei {file_path}: {e}")
-            logging.warning(f"Fehler beim Laden der Datei {file_path}: {e}")
-            # PID aus dem Dateinamen extrahieren und zur Liste hinzufügen
-            pid = filename
-            invalid_files.append(pid)
-
-    # Überprüfen, ob nach der Validierung noch Dateien übrig sind
-    if not valid_nifti_files:
-        logging.warning(f"Keine gültigen und unverarbeiteten NIfTI-Dateien im Verzeichnis {input_dir} gefunden.")
-        print(f"Warnung: Keine gültigen und unverarbeiteten NIfTI-Dateien im Verzeichnis {input_dir} gefunden.")
-        return
-
     # Dataset mit den validen Dateien erstellen
-    dataset = Dataset(data=valid_nifti_files, transform=transforms)
+    dataset = Dataset(data=nifti_files, transform=transforms)
     loader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -127,7 +91,7 @@ def resample_and_normalize(
         collate_fn=pad_list_data_collate
     )
 
-    total_files = len(valid_nifti_files)
+    total_files = len(nifti_files)
     processed_files_count = 0
 
     for batch_data in tqdm(loader, total=len(loader), desc="Progress:"):
@@ -135,7 +99,6 @@ def resample_and_normalize(
             batch_size_actual = len(batch_data["image"])
             for i in range(batch_size_actual):
                 image = batch_data["image"][i]
-                # Metadaten aus dem MetaTensor abrufen
                 meta = image.meta
                 filename = os.path.basename(meta["filename_or_obj"])
 
@@ -170,21 +133,6 @@ def resample_and_normalize(
 
     print(f"Insgesamt verarbeitete Dateien: {processed_files_count}/{total_files}")
 
-    # Liste der fehlerhaften PIDs speichern
-    if invalid_files or skipped_files:
-        summary_path = os.path.join(output_dir, "processing_summary.txt")
-        with open(summary_path, 'w') as f:
-            if invalid_files:
-                f.write("Nicht verarbeitete Dateien aufgrund von Fehlern:\n")
-                for pid in invalid_files:
-                    f.write(f"{pid}\n")
-                f.write("\n")
-            if skipped_files:
-                f.write("Übersprungene Dateien (bereits verarbeitet):\n")
-                for pid in skipped_files:
-                    f.write(f"{pid}\n")
-        print(f"Zusammenfassung der nicht verarbeiteten und übersprungenen Dateien gespeichert unter {summary_path}")
-
 def main():
     parser = argparse.ArgumentParser(description="Resampling und Normalisierung von CT-Bildern")
     parser.add_argument("--input_dir", required=True, help="Pfad zu den Eingabedaten")
@@ -203,11 +151,14 @@ def main():
         interpolation=args.interpolation,
         visualize=args.visualize,
         batch_size=args.batch_size,
-        num_workers=args.num_workers
+        num_workers=args.num_workers,
+        a_min=-200,  # Feinanpassung für Emphyseme
+        a_max=1200,  # Kontraste besser sichtbar
+        gamma=0.8   # Kontrast
     )
 
 if __name__ == "__main__":
     main()
 
-# python3.11 preprocessing\resampling_normalization.py --input_dir "D:\thesis_robert\test_data_folder\black_slices_removed" --output_dir "D:\thesis_robert\test_data_folder\black_slices_removed\resampled"
+# python3.11 preprocessing\resampling_normalization.py --input_dir "D:\thesis_robert\NLST_subset_v6_nifti_unverarbeitet" --output_dir "D:\thesis_robert\NLST_subset_v6"
 
