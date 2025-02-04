@@ -1,8 +1,4 @@
-#!/usr/bin/env python3
-
 """
-rotate_nifti.py
----------------
 Dieses Skript liest alle .nii / .nii.gz Dateien aus input_dir, macht eine
 Rotation in der x-y-Ebene (z. B. 90° oder 180°) und speichert das Ergebnis
 im output_dir.
@@ -103,4 +99,4 @@ if __name__=="__main__":
     main()
 
 
-# python3.11 preprocessing\nifti_orientation.py --input_dir "D:\thesis_robert\Segmentation_Test\V2_unverarbeitet_Data\testdata_v2_unverarbeitet" --output_dir "D:\thesis_robert\Segmentation_Test\V2_unverarbeitet_Data\testdata_v2_unverarbeitet_orient" --k 2
+# python3.11 preprocessing\nifti_orientation.py --input_dir "D:\thesis_robert\NLST_subset_v6_nifti_unverarbeitet" --output_dir "D:\thesis_robert\NLST_subset_v6_SEG" --k 2

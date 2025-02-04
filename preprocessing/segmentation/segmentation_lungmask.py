@@ -12,10 +12,10 @@ from lungmask import mask
 # Konfiguration
 ###############################################################################
 # 1) Pfade
-INPUT_DIR = r"D:\thesis_robert\xx_test"
-OUTPUT_DIR = r"D:\thesis_robert\xx_test\xx"
+INPUT_DIR = r"D:\thesis_robert\NLST_subset_v6_TEST_SEG"
+OUTPUT_DIR = r"D:\thesis_robert\NLST_subset_v6_SEG"
 
-CSV_PATH = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\nlst_subset_v5.csv"
+CSV_PATH = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V6\subset_v6.csv"
 
 # 2) lungmask-Parameter
 MODELNAME = "R231"           # "R231" oder "R231CovidWeb"
@@ -68,7 +68,7 @@ def main():
     if not os.path.exists(CSV_PATH):
         logging.error(f"CSV {CSV_PATH} nicht gefunden. Abbruch.")
         sys.exit(1)
-    df = pd.read_csv(CSV_PATH)
+    df = pd.read_csv(CSV_PATH, sep=";")
     if not {"pid", "study_yr"}.issubset(df.columns):
         logging.error("CSV muss mind. Spalten: pid, study_yr enthalten.")
         sys.exit(1)
