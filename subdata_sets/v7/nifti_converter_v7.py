@@ -11,9 +11,9 @@ from tqdm import tqdm
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Eingabe- und Ausgabe-Pfade
-input_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\nlst_subset_v7_anomalie_data.csv"
-data_path = r"D:\thesis_robert\NLST_subset_v7_dicom_anomalie_unverarbeitet"
-output_path_niftis = r"D:\thesis_robert\NLST_subset_v7_nifti_anomalie_unverarbeitet"
+input_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\nlst_subset_v7_normal_data.csv"
+data_path = r"D:\thesis_robert\NLST_subset_v7_dicom_normal_unverarbeitet"
+output_path_niftis = r"D:\thesis_robert\NLST_subset_v7_normal_unverarbeitet"
 failed_nifti_output = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\nlst_subset_v7_failed_nifti.csv"
 
 # CSV-Datei einlesen
@@ -53,13 +53,19 @@ for _, row in tqdm(df.iterrows(), total=len(df), desc="Konvertiere DICOM zu NIfT
     # Ordnername im neuen Format
     dicom_folder = os.path.join(data_path, f"pid_{pid}_study_yr_{study_yr}")
 
+    # Ziel-Dateiname für die NIfTI-Datei
+    output_filename = os.path.join(output_path_niftis, f"pid_{pid}_study_yr_{study_yr}.nii.gz")
+
+    # Falls die NIfTI-Datei bereits existiert, überspringen
+    if os.path.exists(output_filename):
+        logging.info(f"Übersprungen (bereits vorhanden): {output_filename}")
+        continue
+
+    # Prüfen, ob der DICOM-Ordner existiert
     if not os.path.exists(dicom_folder):
         logging.warning(f"DICOM-Ordner nicht gefunden: {dicom_folder}")
         failed_conversions.append([pid, study_yr, "DICOM-Ordner nicht gefunden"])
         continue
-
-    # Ziel-Dateiname für die NIfTI-Datei
-    output_filename = os.path.join(output_path_niftis, f"pid_{pid}_study_yr_{study_yr}.nii.gz")
 
     # Konvertierung durchführen
     if not convert_dicom_to_nifti(dicom_folder, output_filename):

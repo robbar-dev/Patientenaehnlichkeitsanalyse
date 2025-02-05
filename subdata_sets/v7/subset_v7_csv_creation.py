@@ -2,8 +2,8 @@ import os
 import pandas as pd
 
 # Pfade
-dataPath = r"D:\thesis_robert\NLST_subset_v7_dicom_anomalie_unverarbeitet"
-csvOutputPath = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\nlst_subset_v7_anomalie_data.csv"
+dataPath = r"D:\thesis_robert\NLST_subset_v7_dicom_normal_unverarbeitet"
+csvOutputPath = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\nlst_subset_v7_normal_data.csv"
 
 # Liste für die CSV-Daten
 data_list = []
@@ -19,7 +19,7 @@ for folder_name in os.listdir(dataPath):
         try:
             pid = int(parts[1])  # Patient ID extrahieren
             study_yr = int(parts[4])  # Study Year extrahieren
-            combination = "1-0-0"  # Feste Kombination für alle
+            combination = "0-0-1"  # Feste Kombination für alle
             data_list.append([pid, study_yr, combination])
         except ValueError:
             print(f"Warnung: Konnte keine gültigen Werte aus {folder_name} extrahieren.")
