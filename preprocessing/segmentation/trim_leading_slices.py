@@ -146,4 +146,4 @@ if __name__=="__main__":
     main()
 
 
-# python3.11 preprocessing\trim_leading_slices.py --input_dir "D:\thesis_robert\xx_test" --output_dir "D:\thesis_robert\subset_v2_trimmed" --hu_threshold -300 --fraction_threshold 0.42
+# python3.11 preprocessing\segmentation\trim_leading_slices.py --input_dir "D:\thesis_robert\NLST_subset_v6_TEST_SEG" --output_dir "D:\thesis_robert\NLST_subset_v6_TEST_SEG" --hu_threshold -500 --fraction_threshold 0.5

@@ -12,10 +12,10 @@ from lungmask import mask
 # Konfiguration
 ###############################################################################
 # 1) Pfade
-INPUT_DIR = r"D:\thesis_robert\xx_test"
-OUTPUT_DIR = r"D:\thesis_robert\xx_test\xx"
+INPUT_DIR = r"D:\thesis_robert\NLST_subset_v7_anomalie_resampled_orientation"
+OUTPUT_DIR = r"D:\thesis_robert\NLST_subset_v7_anomalie_resampled_SEG"
 
-CSV_PATH = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\nlst_subset_v5.csv"
+CSV_PATH = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\nlst_subset_v7_anomalie_data.csv"
 
 # 2) lungmask-Parameter
 MODELNAME = "R231"           # "R231" oder "R231CovidWeb"
