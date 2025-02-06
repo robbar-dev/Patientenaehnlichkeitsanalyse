@@ -56,6 +56,7 @@ def run_experiment(cfg):
         )
 
     # 3) Train + Validate in einem Rutsch
+    epoch_csv_file = f"{cfg['exp_name']}_epoch_metrics.csv"
     best_map, best_epoch = trainer.train_with_val_2stage(
         epochs_stage1=cfg["epochs_stage1"],
         epochs_stage2=cfg["epochs_stage2"],
@@ -63,7 +64,8 @@ def run_experiment(cfg):
         val_csv=cfg["val_csv"],
         data_root_val=cfg["data_root"],
         K=10,
-        distance_metric="euclidean"
+        distance_metric="euclidean",
+        epoch_csv_path=epoch_csv_file
     )
 
     # => best_map, best_epoch sind das Ergebnis
@@ -78,14 +80,14 @@ def main():
     matplotlib_logger.setLevel(logging.WARNING)
 
     # Pfade definieren:
-    TRAIN_CSV = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V6\training\nlst_subset_v6_training.csv"
-    VAL_CSV   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V6\validation\nlst_subset_v6_validation.csv"
-    DATA_ROOT = r"D:\thesis_robert\NLST_subset_v6"
+    TRAIN_CSV = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\training\nlst_subset_v7_training.csv"
+    VAL_CSV   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\validation\nlst_subset_v7_validation.csv"
+    DATA_ROOT = r"D:\thesis_robert\NLST_subset_v7"
 
     # Liste von Experiment-Konfigurationen
     experiments = [
       {
-        "exp_name": "Exp41_new_Dataset",
+        "exp_name": "Exp45_new_Dataset_3slices_mil",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
@@ -93,15 +95,15 @@ def main():
         "aggregator_name": "mil",
         "epochs_stage1": 5,
         "epochs_stage2": 25,
-        "num_triplets": 350,
+        "num_triplets": 450,
         "lr": 1e-5,
         "margin": 1.0,
         "roi_size": (96,96,3),
         "overlap": (10,10,1),
         "attention_hidden_dim": 128,
-        "dropout": 0.2,
+        "dropout": 0.4,
         "weight_decay": 1e-4,
-        "use_scheduler": False, 
+        "use_scheduler": True, 
         "freeze_blocks": [0],
         "skip_slices": False,
         "skip_factor": 1,
@@ -109,31 +111,31 @@ def main():
         "filter_uniform_patches": True,
         "do_augmentation_train": True,
       }, 
-      {
-        "exp_name": "Exp41_new_Dataset_max",
-        "train_csv": TRAIN_CSV,
-        "val_csv":   VAL_CSV,
-        "data_root": DATA_ROOT,
+    #   {
+    #     "exp_name": "Exp46_new_Dataset_3slices_mil",
+    #     "train_csv": TRAIN_CSV,
+    #     "val_csv":   VAL_CSV,
+    #     "data_root": DATA_ROOT,
 
-        "aggregator_name": "max",
-        "epochs_stage1": 5,
-        "epochs_stage2": 25,
-        "num_triplets": 350,
-        "lr": 1e-5,
-        "margin": 1.0,
-        "roi_size": (96,96,3),
-        "overlap": (10,10,1),
-        "attention_hidden_dim": 128,
-        "dropout": 0.2,
-        "weight_decay": 1e-4,
-        "use_scheduler": False, 
-        "freeze_blocks": [0],
-        "skip_slices": False,
-        "skip_factor": 1,
-        "filter_empty_patches": False, 
-        "filter_uniform_patches": True,
-        "do_augmentation_train": True,
-      }
+    #     "aggregator_name": "mil",
+    #     "epochs_stage1": 5,
+    #     "epochs_stage2": 25,
+    #     "num_triplets": 450,
+    #     "lr": 1e-5,
+    #     "margin": 1.0,
+    #     "roi_size": (96,96,3),
+    #     "overlap": (10,10,1),
+    #     "attention_hidden_dim": 128,
+    #     "dropout": 0.4,
+    #     "weight_decay": 1e-4,
+    #     "use_scheduler": True, 
+    #     "freeze_blocks": [0],
+    #     "skip_slices": False,
+    #     "skip_factor": 1,
+    #     "filter_empty_patches": False, 
+    #     "filter_uniform_patches": True,
+    #     "do_augmentation_train": True,
+    #   }
     ]
 
     # CSV-Ausgabedatei

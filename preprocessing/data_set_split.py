@@ -80,10 +80,10 @@ def split_csv_balanced(
           f"  Test:  {len(df_test)} Zeilen")
 
 if __name__ == "__main__":
-    input_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V6\subset_v6.csv"
-    out_train = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V6\training\nlst_subset_v6_training.csv"
-    out_val   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V6\validation\nlst_subset_v6_validation.csv"
-    out_test  = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V6\test\nlst_subset_v6_test.csv"
+    input_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\nlst_subset_v7 .csv"
+    out_train = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\training\nlst_subset_v7_training.csv"
+    out_val   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\validation\nlst_subset_v7_validation.csv"
+    out_test  = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\test\nlst_subset_v7_test.csv"
 
     split_csv_balanced(
         input_csv=input_csv,

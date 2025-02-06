@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 import pandas as pd
 import datetime
+import csv
 
 from torch.utils.data import DataLoader
 
@@ -421,7 +422,7 @@ class TripletTrainer(nn.Module):
         num_triplets,
         val_csv,
         data_root_val,
-        K=10,
+        K=3,
         distance_metric='euclidean',
         visualize_every=5,
         visualize_method='tsne',
@@ -512,8 +513,29 @@ class TripletTrainer(nn.Module):
         distance_metric='euclidean',
         visualize_every=5,
         visualize_method='tsne',
-        output_dir='plots'
+        output_dir='plots',
+        epoch_csv_path=None
     ):
+        """
+        Trainiert in zwei Stages (normaler Sampler + Hard Negative),
+        und führt nach jeder Epoche Evaluate + Visualisierung durch.
+        Optional: pro Epoche Metriken in CSV-Log schreiben (epoch_csv_path).
+        """
+
+        # ggf. CSV vorbereiten (Header)
+        if epoch_csv_path is not None:
+            # Falls der Pfad bereits existiert, nur anhängen
+            if not os.path.exists(epoch_csv_path):
+                with open(epoch_csv_path, mode='w', newline='') as f:
+                    writer = csv.writer(f, delimiter=';')
+                    # Definiere Spalten, z. B.:
+                    header = [
+                        "Stage", "Epoch", "TotalLoss", "TripletLoss", "BCELoss",
+                        "Precision@K", "Recall@K", "mAP",
+                        "FibroseF1", "EmphysemF1", "NoduleF1", "MacroF1"
+                    ]
+                    writer.writerow(header)
+
         df_val = pd.read_csv(val_csv)
 
         # Reset Tracking
@@ -534,8 +556,7 @@ class TripletTrainer(nn.Module):
         current_epoch = 0
 
         # 1) Stage1 => normal Sampler
-        normal_sampler = TripletSampler(df=self.df, num_triplets=num_triplets,
-                                        shuffle=True, top_k_negatives=3)
+        normal_sampler = TripletSampler(df=self.df, num_triplets=num_triplets, shuffle=True, top_k_negatives=3)
 
         for e in range(1, epochs_stage1+1):
             current_epoch += 1
@@ -543,7 +564,7 @@ class TripletTrainer(nn.Module):
             self._train_one_epoch_internal(normal_sampler)
             normal_sampler.reset_epoch()
 
-            # Evaluate (IR) + Multi-Label
+            # Evaluate
             self._evaluate_and_visualize(
                 current_epoch=current_epoch,
                 total_epochs=total_epochs,
@@ -557,11 +578,21 @@ class TripletTrainer(nn.Module):
                 output_dir=output_dir
             )
 
+            # => In CSV loggen
+            if epoch_csv_path is not None:
+                self._write_epoch_csv(
+                    stage="Stage1",
+                    epoch=current_epoch,
+                    csv_path=epoch_csv_path
+                )
+
         # 2) Stage2 => HardNegative
+        hard_sampler = None
         for e in range(1, epochs_stage2+1):
             current_epoch += 1
             logging.info(f"=== STAGE2-Epoch {current_epoch}/{total_epochs} ===")
 
+            # Alle 5 Epochen Sampler neu bauen
             if (e % 5) == 1:
                 hard_sampler = HardNegativeTripletSampler(
                     df=self.df,
@@ -571,7 +602,7 @@ class TripletTrainer(nn.Module):
                 )
             self._train_one_epoch_internal(hard_sampler)
 
-            # Evaluate (IR) + Multi-Label
+            # Evaluate
             self._evaluate_and_visualize(
                 current_epoch=current_epoch,
                 total_epochs=total_epochs,
@@ -585,11 +616,66 @@ class TripletTrainer(nn.Module):
                 output_dir=output_dir
             )
 
+            # => In CSV loggen
+            if epoch_csv_path is not None:
+                self._write_epoch_csv(
+                    stage="Stage2",
+                    epoch=current_epoch,
+                    csv_path=epoch_csv_path
+                )
+
+        # Nach Ende: Plots
         self.plot_loss_components(output_dir=output_dir)
         self.plot_metric_curves(output_dir=output_dir)
         self.plot_multilabel_f1_curves(output_dir=output_dir)
 
         return self.best_val_map, self.best_val_epoch
+
+    # -----------------------------------------------------
+    # Hilfsfunktion zum CSV-Loggen pro Epoche
+    # -----------------------------------------------------
+    def _write_epoch_csv(self, stage, epoch, csv_path):
+        """
+        Schreibt die aktuellen (letzten) Werte aus self.epoch_losses,
+        self.metric_history, self.multilabel_history in csv_path.
+        """
+        if len(self.epoch_losses) == 0:
+            # Falls irgendwas schief geht und wir keine Verlaufsdaten haben
+            return
+
+        # Letzte Werte
+        total_loss = self.epoch_losses[-1]
+        trip_loss  = self.epoch_triplet_losses[-1]
+        bce_loss   = self.epoch_bce_losses[-1]
+
+        precisionK = self.metric_history["precision"][-1] if self.metric_history["precision"] else 0
+        recallK    = self.metric_history["recall"][-1]    if self.metric_history["recall"] else 0
+        map_val    = self.metric_history["mAP"][-1]       if self.metric_history["mAP"] else 0
+
+        fib_f1     = self.multilabel_history["fibrose_f1"][-1]
+        emph_f1    = self.multilabel_history["emphysem_f1"][-1]
+        nod_f1     = self.multilabel_history["nodule_f1"][-1]
+        mac_f1     = self.multilabel_history["macro_f1"][-1]
+
+        # Jetzt schreiben wir eine Zeile
+        row = [
+            stage, epoch,
+            f"{total_loss:.4f}",
+            f"{trip_loss:.4f}",
+            f"{bce_loss:.4f}",
+            f"{precisionK:.4f}",
+            f"{recallK:.4f}",
+            f"{map_val:.4f}",
+            f"{fib_f1:.4f}",
+            f"{emph_f1:.4f}",
+            f"{nod_f1:.4f}",
+            f"{mac_f1:.4f}",
+        ]
+
+        with open(csv_path, 'a', newline='') as f:
+            writer = csv.writer(f, delimiter=';')
+            writer.writerow(row)
+        logging.info(f"=> Epoche {epoch} in {csv_path} geloggt (Stage={stage}).")
 
 
     # ---------------------------
@@ -602,7 +688,7 @@ class TripletTrainer(nn.Module):
         val_csv,
         df_val,
         data_root_val,
-        K=10,
+        K=3,
         distance_metric='euclidean',
         visualize_every=5,
         visualize_method='tsne',

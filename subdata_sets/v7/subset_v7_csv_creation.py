@@ -2,7 +2,7 @@ import os
 import pandas as pd
 
 # Pfade
-dataPath = r"D:\thesis_robert\NLST_subset_v7_dicom_normal_unverarbeitet"
+dataPath = r"D:\thesis_robert\subset_v7\NLST_subset_v7_dicom_normal_unverarbeitet"
 csvOutputPath = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\nlst_subset_v7_normal_data.csv"
 
 # Liste für die CSV-Daten

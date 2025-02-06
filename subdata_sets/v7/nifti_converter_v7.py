@@ -12,8 +12,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # Eingabe- und Ausgabe-Pfade
 input_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\nlst_subset_v7_normal_data.csv"
-data_path = r"D:\thesis_robert\NLST_subset_v7_dicom_normal_unverarbeitet"
-output_path_niftis = r"D:\thesis_robert\NLST_subset_v7_normal_unverarbeitet"
+data_path = r"D:\thesis_robert\subset_v7\NLST_subset_v7_dicom_normal_unverarbeitet"
+output_path_niftis = r"D:\thesis_robert\subset_v7\NLST_subset_v7_normal_unverarbeitet"
 failed_nifti_output = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\nlst_subset_v7_failed_nifti.csv"
 
 # CSV-Datei einlesen
