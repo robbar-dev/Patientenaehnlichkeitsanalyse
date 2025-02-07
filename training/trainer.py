@@ -34,24 +34,17 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
+# Für ACC, AUC-Berechnung
+from sklearn.metrics import accuracy_score, roc_auc_score
 
 # ------------------------------------------------
 # (1) Funktion zum Parsen: "1-0-0" => 1 (krank), "0-0-1" => 0 (gesund)
 # ------------------------------------------------
 def parse_combo_str_to_vec(combo_str):
-    """
-    Für deinen neuen Datensatz hast du im CSV-Feld 'combination' entweder '1-0-0' oder '0-0-1'.
-    Wir mappen das hier auf einen einzelnen Integer:
-      '1-0-0' => 1 (krank)
-      '0-0-1' => 0 (gesund)
-
-    Falls du mehr Varianten hättest, könntest du hier zusätzliche if-Abfragen ergänzen.
-    """
     parts = [int(x) for x in combo_str.split('-')]
     if parts == [1,0,0]:
         return 1
     else:
-        # Annahme: Alle anderen Fälle (insbesondere '0-0-1') => 0
         return 0
 
 
@@ -71,7 +64,6 @@ class TripletTrainer(nn.Module):
         dropout=0.2,
         weight_decay=1e-5,
         freeze_blocks=None,
-        # SinglePatientDataset
         skip_slices=True,
         skip_factor=2,
         filter_empty_patches=False,
@@ -79,9 +71,7 @@ class TripletTrainer(nn.Module):
         filter_uniform_patches=True,
         min_std_threshold=0.01,
         do_patch_minmax=False,
-        # Hybrid-Loss
         lambda_bce=1.0,
-        # NEU: manueller Parameter für Augmentation im Training
         do_augmentation_train=True
     ):
         super().__init__()
@@ -126,8 +116,7 @@ class TripletTrainer(nn.Module):
         # (C) TripletLoss
         self.triplet_loss_fn = nn.TripletMarginLoss(margin=margin, p=2)
 
-        # (D) Binary-Kopf + BCE-Loss
-        #    => Nur 1 Ausgabe-Logit (gesund vs. krank)
+        # (D) Binary-Kopf + BCE-Loss => 1 Output (gesund=0 vs. krank=1)
         self.classifier = nn.Linear(512, 1).to(device)
         self.bce_loss_fn = nn.BCEWithLogitsLoss()
 
@@ -144,24 +133,22 @@ class TripletTrainer(nn.Module):
         self.best_val_map = 0.0
         self.best_val_epoch = -1
 
-        # Verlaufslisten
-        self.epoch_losses = []         # Gesamtloss (Triplet + BCE)
-        self.epoch_triplet_losses = [] # Nur Triplet
-        self.epoch_bce_losses = []     # Nur BCE
+        # Verlaufslisten (Loss)
+        self.epoch_losses = []         
+        self.epoch_triplet_losses = []
+        self.epoch_bce_losses = []
 
+        # IR-Metriken
         self.metric_history = {
             "precision": [],
             "recall": [],
             "mAP": []
         }
 
-        # Optional für das bisherige Multi-Label-Tracking
-        # (wir füllen das weiterhin, damit deine Plots nicht crashen)
-        self.multilabel_history = {
-            "fibrose_f1": [],
-            "emphysem_f1": [],
-            "nodule_f1": [],
-            "macro_f1": []
+        # NEU: Dictionary für binäre Klassifikation
+        self.binclass_history = {
+            "acc": [],
+            "auc": []
         }
 
         logging.info(
@@ -178,9 +165,6 @@ class TripletTrainer(nn.Module):
     # _forward_patient => (emb, logits)
     # ---------------------------
     def _forward_patient(self, pid, study_yr):
-        """
-        => Nur beim Training. do_augmentation_train steuert Augmentation.
-        """
         ds = SinglePatientDataset(
             data_root=self.data_root,
             pid=pid,
@@ -199,7 +183,6 @@ class TripletTrainer(nn.Module):
 
         loader = DataLoader(ds, batch_size=32, shuffle=False)
 
-        # Sicherstellen, dass wir im Train-Modus sind (BatchNorm/Dropout etc.)
         self.base_cnn.train()
         self.mil_agg.train()
         self.classifier.train()
@@ -211,20 +194,16 @@ class TripletTrainer(nn.Module):
             patch_embs.append(emb)
 
         if len(patch_embs) == 0:
-            # Edge-Case: Falls kein Patch existiert, nimm Dummy
             dummy = torch.zeros((1,512), device=self.device, requires_grad=True)
             dummy_logits = self.classifier(dummy)
             return dummy, dummy_logits
 
         patch_embs = torch.cat(patch_embs, dim=0)
-        patient_emb = self.mil_agg(patch_embs)      # z.B. (1,512)
-        logits = self.classifier(patient_emb)       # => (1,1)
+        patient_emb = self.mil_agg(patch_embs)
+        logits = self.classifier(patient_emb)
         return patient_emb, logits
 
     def compute_patient_embedding(self, pid, study_yr):
-        """
-        => Validation/Test: keine Augmentation
-        """
         ds = SinglePatientDataset(
             data_root=self.data_root,
             pid=pid,
@@ -274,21 +253,16 @@ class TripletTrainer(nn.Module):
             p_pid, p_sy = pos_info['pid'], pos_info['study_yr']
             n_pid, n_sy = neg_info['pid'], neg_info['study_yr']
 
-            # Früher "multi_label", jetzt nur label=0/1
             a_label = anchor_info['label']
             p_label = pos_info['label']
             n_label = neg_info['label']
 
-            # Forward => Aug = True
             a_emb, a_logits = self._forward_patient(a_pid, a_sy)
             p_emb, p_logits = self._forward_patient(p_pid, p_sy)
             n_emb, n_logits = self._forward_patient(n_pid, n_sy)
 
-            # (1) TripletLoss
             trip_loss = self.triplet_loss_fn(a_emb, p_emb, n_emb)
 
-            # (2) BCE-Loss
-            #     Wir wandeln int=> Tensor shape (1,1)
             a_label_t = torch.tensor([[a_label]], dtype=torch.float32, device=self.device)
             p_label_t = torch.tensor([[p_label]], dtype=torch.float32, device=self.device)
             n_label_t = torch.tensor([[n_label]], dtype=torch.float32, device=self.device)
@@ -298,7 +272,6 @@ class TripletTrainer(nn.Module):
             bce_n = self.bce_loss_fn(n_logits, n_label_t)
             bce_loss = (bce_a + bce_p + bce_n) / 3.0
 
-            # (3) Gesamt-Loss
             loss = trip_loss + self.lambda_bce * bce_loss
 
             self.optimizer.zero_grad()
@@ -325,7 +298,6 @@ class TripletTrainer(nn.Module):
         self.epoch_losses.append(avg_loss)
         self.epoch_triplet_losses.append(avg_trip)
         self.epoch_bce_losses.append(avg_bce)
-
 
     # ---------------------------
     # train_one_epoch_internal (Hard Negatives)
@@ -387,12 +359,10 @@ class TripletTrainer(nn.Module):
         self.epoch_triplet_losses.append(avg_trip)
         self.epoch_bce_losses.append(avg_bce)
 
-
     # ---------------------------
     # train_loop
     # ---------------------------
     def train_loop(self, num_epochs=2, num_triplets=100):
-        # Beispielhafter HardNegative-Sampler
         sampler = HardNegativeTripletSampler(
             df=self.df,
             trainer=self,
@@ -412,9 +382,8 @@ class TripletTrainer(nn.Module):
 
             sampler.reset_epoch()
 
-
     # ---------------------------
-    # train_with_val => + evaluate
+    # train_with_val
     # ---------------------------
     def train_with_val(
         self,
@@ -436,15 +405,15 @@ class TripletTrainer(nn.Module):
         self.epoch_triplet_losses = []
         self.epoch_bce_losses = []
         self.metric_history = {"precision": [], "recall": [], "mAP": []}
+        self.binclass_history = {"acc": [], "auc": []}
 
         df_val = pd.read_csv(val_csv)
 
         for epoch in range(1, epochs+1):
             logging.info(f"=== EPOCH {epoch}/{epochs} ===")
-            # 1 Epoche train
             self.train_loop(num_epochs=1, num_triplets=num_triplets)
 
-            # (2) Evaluate => IR-Metriken
+            # (1) IR-Metriken
             val_metrics = evaluate_model(
                 trainer=self,
                 data_csv=val_csv,
@@ -463,26 +432,18 @@ class TripletTrainer(nn.Module):
             self.metric_history["recall"].append(recallK)
             self.metric_history["mAP"].append(map_val)
 
-            # Track best IR-mAP
             if map_val > self.best_val_map:
                 self.best_val_map = map_val
                 self.best_val_epoch = epoch
                 logging.info(f"=> New Best mAP={map_val:.4f} @ epoch={epoch}")
 
-            # (3) Evaluate => "Multi-Label"-Funktion, jetzt binär getrimmt
-            multilabel_results = self.evaluate_multilabel_classification(
-                df_val,
-                data_root_val,
-                threshold=0.5
-            )
-            logging.info(f"Multi-Label => {multilabel_results}")
+            # (2) Binary classification => ACC, AUC
+            acc_val, auc_val = self.evaluate_binary_classification(df_val, data_root_val)
+            self.binclass_history["acc"].append(acc_val)
+            self.binclass_history["auc"].append(auc_val)
+            logging.info(f"Binary-Classification => ACC={acc_val:.4f}, AUC={auc_val:.4f}")
 
-            self.multilabel_history["fibrose_f1"].append(multilabel_results["fibrose_f1"])
-            self.multilabel_history["emphysem_f1"].append(multilabel_results["emphysem_f1"])
-            self.multilabel_history["nodule_f1"].append(multilabel_results["nodule_f1"])
-            self.multilabel_history["macro_f1"].append(multilabel_results["macro_f1"])
-
-            # (4) Visualisierung
+            # (3) Visualisierung
             if epoch % visualize_every == 0:
                 self.visualize_embeddings(
                     df=df_val,
@@ -494,13 +455,11 @@ class TripletTrainer(nn.Module):
 
         self.plot_loss_components(output_dir=output_dir)
         self.plot_metric_curves(output_dir=output_dir)
-        self.plot_multilabel_f1_curves(output_dir=output_dir)
-
+        self.plot_acc_auc_curves(output_dir=output_dir)  # <--- Neu
         return (self.best_val_map, self.best_val_epoch)
 
-
     # ---------------------------
-    # train_with_val_2stage (Hard Negatives)
+    # train_with_val_2stage
     # ---------------------------
     def train_with_val_2stage(
         self,
@@ -509,54 +468,41 @@ class TripletTrainer(nn.Module):
         num_triplets,
         val_csv,
         data_root_val,
-        K=10,
+        K=3,
         distance_metric='euclidean',
         visualize_every=5,
         visualize_method='tsne',
         output_dir='plots',
         epoch_csv_path=None
     ):
-        """
-        Trainiert in zwei Stages (normaler Sampler + Hard Negative),
-        und führt nach jeder Epoche Evaluate + Visualisierung durch.
-        Optional: pro Epoche Metriken in CSV-Log schreiben (epoch_csv_path).
-        """
-
-        # ggf. CSV vorbereiten (Header)
         if epoch_csv_path is not None:
-            # Falls der Pfad bereits existiert, nur anhängen
             if not os.path.exists(epoch_csv_path):
                 with open(epoch_csv_path, mode='w', newline='') as f:
                     writer = csv.writer(f, delimiter=';')
-                    # Definiere Spalten, z. B.:
                     header = [
                         "Stage", "Epoch", "TotalLoss", "TripletLoss", "BCELoss",
                         "Precision@K", "Recall@K", "mAP",
-                        "FibroseF1", "EmphysemF1", "NoduleF1", "MacroF1"
+                        "ACC", "AUC"
                     ]
                     writer.writerow(header)
 
         df_val = pd.read_csv(val_csv)
 
-        # Reset Tracking
+        # Reset
         self.best_val_map = 0.0
         self.best_val_epoch = -1
         self.epoch_losses = []
         self.epoch_triplet_losses = []
         self.epoch_bce_losses = []
         self.metric_history = {"precision": [], "recall": [], "mAP": []}
-        self.multilabel_history = {
-            "fibrose_f1": [],
-            "emphysem_f1": [],
-            "nodule_f1": [],
-            "macro_f1": []
-        }
+        self.binclass_history = {"acc": [], "auc": []}
 
         total_epochs = epochs_stage1 + epochs_stage2
         current_epoch = 0
 
-        # 1) Stage1 => normal Sampler
-        normal_sampler = TripletSampler(df=self.df, num_triplets=num_triplets, shuffle=True, top_k_negatives=3)
+        # (A) Stage1
+        normal_sampler = TripletSampler(df=self.df, num_triplets=num_triplets,
+                                        shuffle=True, top_k_negatives=3)
 
         for e in range(1, epochs_stage1+1):
             current_epoch += 1
@@ -564,7 +510,6 @@ class TripletTrainer(nn.Module):
             self._train_one_epoch_internal(normal_sampler)
             normal_sampler.reset_epoch()
 
-            # Evaluate
             self._evaluate_and_visualize(
                 current_epoch=current_epoch,
                 total_epochs=total_epochs,
@@ -575,24 +520,17 @@ class TripletTrainer(nn.Module):
                 distance_metric=distance_metric,
                 visualize_every=visualize_every,
                 visualize_method=visualize_method,
-                output_dir=output_dir
+                output_dir=output_dir,
+                stage="Stage1",
+                epoch_csv_path=epoch_csv_path
             )
 
-            # => In CSV loggen
-            if epoch_csv_path is not None:
-                self._write_epoch_csv(
-                    stage="Stage1",
-                    epoch=current_epoch,
-                    csv_path=epoch_csv_path
-                )
-
-        # 2) Stage2 => HardNegative
+        # (B) Stage2
         hard_sampler = None
         for e in range(1, epochs_stage2+1):
             current_epoch += 1
             logging.info(f"=== STAGE2-Epoch {current_epoch}/{total_epochs} ===")
 
-            # Alle 5 Epochen Sampler neu bauen
             if (e % 5) == 1:
                 hard_sampler = HardNegativeTripletSampler(
                     df=self.df,
@@ -602,7 +540,6 @@ class TripletTrainer(nn.Module):
                 )
             self._train_one_epoch_internal(hard_sampler)
 
-            # Evaluate
             self._evaluate_and_visualize(
                 current_epoch=current_epoch,
                 total_epochs=total_epochs,
@@ -613,73 +550,59 @@ class TripletTrainer(nn.Module):
                 distance_metric=distance_metric,
                 visualize_every=visualize_every,
                 visualize_method=visualize_method,
-                output_dir=output_dir
+                output_dir=output_dir,
+                stage="Stage2",
+                epoch_csv_path=epoch_csv_path
             )
 
-            # => In CSV loggen
-            if epoch_csv_path is not None:
-                self._write_epoch_csv(
-                    stage="Stage2",
-                    epoch=current_epoch,
-                    csv_path=epoch_csv_path
-                )
-
-        # Nach Ende: Plots
         self.plot_loss_components(output_dir=output_dir)
         self.plot_metric_curves(output_dir=output_dir)
-        self.plot_multilabel_f1_curves(output_dir=output_dir)
-
+        self.plot_acc_auc_curves(output_dir=output_dir)
         return self.best_val_map, self.best_val_epoch
 
-    # -----------------------------------------------------
-    # Hilfsfunktion zum CSV-Loggen pro Epoche
-    # -----------------------------------------------------
-    def _write_epoch_csv(self, stage, epoch, csv_path):
+    # ---------------------------
+    # evaluate_binary_classification => ACC, AUC
+    # ---------------------------
+    def evaluate_binary_classification(self, df, data_root):
         """
-        Schreibt die aktuellen (letzten) Werte aus self.epoch_losses,
-        self.metric_history, self.multilabel_history in csv_path.
+        1) Für jeden Patienten => Logit => Sigmoid => prob
+        2) Sammle alle gt-Labels + predicted probs
+        3) ACC, AUC
         """
-        if len(self.epoch_losses) == 0:
-            # Falls irgendwas schief geht und wir keine Verlaufsdaten haben
-            return
+        self.base_cnn.eval()
+        self.mil_agg.eval()
+        self.classifier.eval()
 
-        # Letzte Werte
-        total_loss = self.epoch_losses[-1]
-        trip_loss  = self.epoch_triplet_losses[-1]
-        bce_loss   = self.epoch_bce_losses[-1]
+        y_true = []
+        y_scores = []
 
-        precisionK = self.metric_history["precision"][-1] if self.metric_history["precision"] else 0
-        recallK    = self.metric_history["recall"][-1]    if self.metric_history["recall"] else 0
-        map_val    = self.metric_history["mAP"][-1]       if self.metric_history["mAP"] else 0
+        for idx, row in df.iterrows():
+            pid = row['pid']
+            study_yr = row['study_yr']
+            combo_str = row['combination']
+            label = parse_combo_str_to_vec(combo_str)  # 0 oder 1
 
-        fib_f1     = self.multilabel_history["fibrose_f1"][-1]
-        emph_f1    = self.multilabel_history["emphysem_f1"][-1]
-        nod_f1     = self.multilabel_history["nodule_f1"][-1]
-        mac_f1     = self.multilabel_history["macro_f1"][-1]
+            with torch.no_grad():
+                emb = self.compute_patient_embedding(pid, study_yr)
+                logits = self.classifier(emb)  # (1,1)
+                prob = torch.sigmoid(logits).item()
 
-        # Jetzt schreiben wir eine Zeile
-        row = [
-            stage, epoch,
-            f"{total_loss:.4f}",
-            f"{trip_loss:.4f}",
-            f"{bce_loss:.4f}",
-            f"{precisionK:.4f}",
-            f"{recallK:.4f}",
-            f"{map_val:.4f}",
-            f"{fib_f1:.4f}",
-            f"{emph_f1:.4f}",
-            f"{nod_f1:.4f}",
-            f"{mac_f1:.4f}",
-        ]
+            y_true.append(label)
+            y_scores.append(prob)
 
-        with open(csv_path, 'a', newline='') as f:
-            writer = csv.writer(f, delimiter=';')
-            writer.writerow(row)
-        logging.info(f"=> Epoche {epoch} in {csv_path} geloggt (Stage={stage}).")
+        # Accuracy => Schwelle 0.5
+        y_pred = [1 if s>=0.5 else 0 for s in y_scores]
+        acc = accuracy_score(y_true, y_pred)
 
+        # ROC-AUC => braucht mind. eine pos+neg Instanz
+        auc_val = 0.0
+        if len(set(y_true))>1:
+            auc_val = roc_auc_score(y_true, y_scores)
+
+        return acc, auc_val
 
     # ---------------------------
-    # Hilfsfunktion für Evaluate + Visuals
+    # _evaluate_and_visualize
     # ---------------------------
     def _evaluate_and_visualize(
         self,
@@ -692,8 +615,11 @@ class TripletTrainer(nn.Module):
         distance_metric='euclidean',
         visualize_every=5,
         visualize_method='tsne',
-        output_dir='plots'
+        output_dir='plots',
+        stage="Stage?",
+        epoch_csv_path=None
     ):
+        # IR-Metriken
         val_metrics = evaluate_model(
             trainer=self,
             data_csv=val_csv,
@@ -717,15 +643,11 @@ class TripletTrainer(nn.Module):
             self.best_val_epoch = current_epoch
             logging.info(f"=> New Best mAP={map_val:.4f} @ epoch={current_epoch}")
 
-        # Multi-Label (jetzt binär) => wir belassen den Funktionsnamen
-        # und loggen in das vorhandene dict.
-        multilabel_results = self.evaluate_multilabel_classification(df_val, data_root_val, threshold=0.5)
-        logging.info(f"Multi-Label => {multilabel_results}")
-
-        self.multilabel_history["fibrose_f1"].append(multilabel_results["fibrose_f1"])
-        self.multilabel_history["emphysem_f1"].append(multilabel_results["emphysem_f1"])
-        self.multilabel_history["nodule_f1"].append(multilabel_results["nodule_f1"])
-        self.multilabel_history["macro_f1"].append(multilabel_results["macro_f1"])
+        # Binär-Klassifikation => ACC, AUC
+        acc_val, auc_val = self.evaluate_binary_classification(df_val, data_root_val)
+        self.binclass_history["acc"].append(acc_val)
+        self.binclass_history["auc"].append(auc_val)
+        logging.info(f"Binary => ACC={acc_val:.4f}, AUC={auc_val:.4f}")
 
         # Visualisierung
         if current_epoch % visualize_every == 0:
@@ -737,66 +659,45 @@ class TripletTrainer(nn.Module):
                 output_dir=output_dir
             )
 
+        # CSV-Logging pro Epoche
+        if epoch_csv_path is not None:
+            self._write_epoch_csv(stage, current_epoch, epoch_csv_path, acc_val, auc_val)
 
     # ---------------------------
-    # evaluate_multilabel_classification => minimal auf Binärlogik getrimmt
+    # CSV-Log pro Epoche
     # ---------------------------
-    def evaluate_multilabel_classification(self, df, data_root, threshold=0.5):
-        """
-        Ehemals Multi-Label, jetzt nur noch 0/1:
-          - parse_combo_str_to_vec => 0/1
-          - BCE => Wir berechnen TP,FP,FN nur für "krank=1".
-          - Die Dictionary-Keys fibrose/emphysem/nodule behalten wir bei,
-            damit der restliche Code/Plot nicht abstürzt.
-        """
-        self.base_cnn.eval()
-        self.mil_agg.eval()
-        self.classifier.eval()
+    def _write_epoch_csv(self, stage, epoch, csv_path, acc_val, auc_val):
+        if len(self.epoch_losses) == 0:
+            return
 
-        TP = 0
-        FP = 0
-        FN = 0
+        total_loss = self.epoch_losses[-1]
+        trip_loss  = self.epoch_triplet_losses[-1]
+        bce_loss   = self.epoch_bce_losses[-1]
 
-        for idx, row in df.iterrows():
-            pid = row['pid']
-            study_yr = row['study_yr']
-            combo_str = row['combination']
+        precisionK = self.metric_history["precision"][-1]
+        recallK    = self.metric_history["recall"][-1]
+        map_val    = self.metric_history["mAP"][-1]
 
-            gt_label = parse_combo_str_to_vec(combo_str)  # => 0 oder 1
+        row = [
+            stage,
+            epoch,
+            f"{total_loss:.4f}",
+            f"{trip_loss:.4f}",
+            f"{bce_loss:.4f}",
+            f"{precisionK:.4f}",
+            f"{recallK:.4f}",
+            f"{map_val:.4f}",
+            f"{acc_val:.4f}",
+            f"{auc_val:.4f}",
+        ]
 
-            with torch.no_grad():
-                emb = self.compute_patient_embedding(pid, study_yr)
-                logits = self.classifier(emb)    # shape (1,1)
-                prob = torch.sigmoid(logits).item()
-                pred = 1 if prob >= threshold else 0
-
-            if gt_label == 1 and pred == 1:
-                TP += 1
-            elif gt_label == 0 and pred == 1:
-                FP += 1
-            elif gt_label == 1 and pred == 0:
-                FN += 1
-
-        precision = TP/(TP+FP) if (TP+FP)>0 else 0
-        recall    = TP/(TP+FN) if (TP+FN)>0 else 0
-        f1 = 0
-        if precision+recall > 0:
-            f1 = 2*precision*recall/(precision+recall)
-
-        # Wir "missbrauchen" die alten Keys und tragen 0 für unnötige Felder ein.
-        results = {}
-        results["fibrose_precision"] = precision
-        results["fibrose_recall"]    = recall
-        results["fibrose_f1"]        = f1
-        results["emphysem_f1"]       = 0
-        results["nodule_f1"]         = 0
-        results["macro_f1"]          = f1   # Macro-F1 = F1 bei 2-Klassen
-
-        return results
-
+        with open(csv_path, 'a', newline='') as f:
+            writer = csv.writer(f, delimiter=';')
+            writer.writerow(row)
+        logging.info(f"=> Epoche {epoch} in {csv_path} geloggt (Stage={stage}).")
 
     # ---------------------------
-    # visualize_embeddings (unverändert)
+    # VIS
     # ---------------------------
     def visualize_embeddings(self, df, data_root,
                              method='tsne',
@@ -849,15 +750,47 @@ class TripletTrainer(nn.Module):
         plt.close()
         logging.info(f"Saved embedding plot: {fname}")
 
+    # ---------------------------
+    # Plot: ACC, AUC vs. Epoch
+    # ---------------------------
+    def plot_acc_auc_curves(self, output_dir='plots'):
+        """
+        Zeichnet den Verlauf von Accuracy + AUC vs. Epoche.
+        """
+        if len(self.binclass_history["acc"]) == 0:
+            logging.info("Keine binclass_history => skip plot_acc_auc_curves.")
+            return
+
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        x_vals = range(1, len(self.binclass_history["acc"])+1)
+        acc_vals = self.binclass_history["acc"]
+        auc_vals = self.binclass_history["auc"]
+
+        plt.figure(figsize=(8,6))
+        plt.plot(x_vals, acc_vals, 'b-o', label='Accuracy')
+        plt.plot(x_vals, auc_vals, 'r-^', label='AUC')
+        plt.title("Binary Classification: ACC & AUC vs. Epoch")
+        plt.xlabel("Epoch")
+        plt.ylabel("Value")
+        plt.ylim(0,1)
+        plt.legend(loc='best')
+
+        aggregator_name = getattr(self.mil_agg, '__class__').__name__
+        timestr = datetime.datetime.now().strftime("%m%d-%H%M")
+        outname = os.path.join(output_dir, f"acc_auc_vs_epoch_{aggregator_name}_{timestr}.png")
+        plt.savefig(outname, dpi=150)
+        plt.close()
+        logging.info(f"Saved ACC/AUC curves: {outname}")
 
     # ---------------------------
-    # plot_loss_components, plot_metric_curves, ...
+    # plot_loss_components, plot_metric_curves
     # ---------------------------
     def plot_loss_components(self, output_dir='plots'):
         if not self.epoch_losses:
             logging.info("Keine Verlaufsdaten => skip plot_loss_components.")
             return
-
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
@@ -876,7 +809,6 @@ class TripletTrainer(nn.Module):
         aggregator_name = getattr(self.mil_agg, '__class__').__name__
         timestr = datetime.datetime.now().strftime("%m%d-%H%M")
         outname = os.path.join(output_dir, f"loss_components_{aggregator_name}_{timestr}.png")
-
         plt.savefig(outname, dpi=150)
         plt.close()
         logging.info(f"Saved loss components plot: {outname}")
@@ -905,47 +837,10 @@ class TripletTrainer(nn.Module):
         outname = os.path.join(output_dir, f"metrics_vs_epoch_{aggregator_name}_{timestr}.png")
         plt.savefig(outname, dpi=150)
         plt.close()
-        logging.info(f"Saved metric curves: {outname}")
-
-    def plot_multilabel_f1_curves(self, output_dir='plots'):
-        if not hasattr(self, 'multilabel_history'):
-            logging.info("No multilabel_history => skip plot_multilabel_f1_curves.")
-            return
-        if len(self.multilabel_history["macro_f1"]) == 0:
-            logging.info("No data in multilabel_history => skip plot_multilabel_f1_curves.")
-            return
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-
-        x_vals = range(1, len(self.multilabel_history["macro_f1"])+1)
-
-        fib_f1   = self.multilabel_history["fibrose_f1"]
-        emph_f1  = self.multilabel_history["emphysem_f1"]
-        nod_f1   = self.multilabel_history["nodule_f1"]
-        mac_f1   = self.multilabel_history["macro_f1"]
-
-        plt.figure(figsize=(8,6))
-        plt.plot(x_vals, fib_f1,   'r-o', label='Fibrose F1')
-        plt.plot(x_vals, emph_f1,  'g-s', label='Emphysem F1')
-        plt.plot(x_vals, nod_f1,   'b-^', label='Nodule F1')
-        plt.plot(x_vals, mac_f1,   'k--', label='Macro-F1', linewidth=2.0)
-
-        plt.title("Multi-Label F1 vs. Epoch (eigentlich Binär)")
-        plt.xlabel("Epoch")
-        plt.ylabel("F1 Score")
-        plt.ylim(0,1)
-        plt.legend(loc='best')
-
-        aggregator_name = getattr(self.mil_agg, '__class__').__name__
-        timestr = datetime.datetime.now().strftime("%m%d-%H%M")
-        outname = os.path.join(output_dir, f"multilabel_f1_vs_epoch_{aggregator_name}_{timestr}.png")
-
-        plt.savefig(outname, dpi=150)
-        plt.close()
-        logging.info(f"Saved multi-label F1 curve: {outname}")
+        logging.info(f"Saved IR metric curves: {outname}")
 
     # ---------------------------
-    # Checkpoint
+    # Checkpoints
     # ---------------------------
     def save_checkpoint(self, path):
         ckpt = {

@@ -11,10 +11,10 @@ from tqdm import tqdm
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Eingabe- und Ausgabe-Pfade
-input_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V6\subset_v6.csv"
+input_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\nlst_subset_v7 .csv"
 data_path = r"M:\public_data\tcia_ml\nlst\ct"
-failed_nifti_output = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V6\subset_v6_failed_nifti.csv"
-output_path_niftidatein = r"D:\thesis_robert\NLST_subset_v6_nifti_unverarbeitet"
+failed_nifti_output = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\subset_v7_failed_nifti.csv"
+output_path_niftidatein = r"D:\thesis_robert\NLST_subset_v7_series_nifti_unverarbeitet"
 
 # CSV-Datei einlesen
 logging.info("Lese die CSV-Datei ein...")

@@ -63,7 +63,7 @@ def run_experiment(cfg):
         num_triplets=cfg["num_triplets"],
         val_csv=cfg["val_csv"],
         data_root_val=cfg["data_root"],
-        K=10,
+        K=3,
         distance_metric="euclidean",
         epoch_csv_path=epoch_csv_file
     )
@@ -82,12 +82,12 @@ def main():
     # Pfade definieren:
     TRAIN_CSV = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\training\nlst_subset_v7_training.csv"
     VAL_CSV   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\validation\nlst_subset_v7_validation.csv"
-    DATA_ROOT = r"D:\thesis_robert\NLST_subset_v7"
+    DATA_ROOT = r"D:\thesis_robert\NLST_subset_v7_series"
 
     # Liste von Experiment-Konfigurationen
     experiments = [
       {
-        "exp_name": "Exp45_new_Dataset_3slices_mil",
+        "exp_name": "Exp47_new_Dataset_3slices_mil",
         "train_csv": TRAIN_CSV,
         "val_csv":   VAL_CSV,
         "data_root": DATA_ROOT,
@@ -103,7 +103,7 @@ def main():
         "attention_hidden_dim": 128,
         "dropout": 0.4,
         "weight_decay": 1e-4,
-        "use_scheduler": True, 
+        "use_scheduler": False, 
         "freeze_blocks": [0],
         "skip_slices": False,
         "skip_factor": 1,

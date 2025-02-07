@@ -17,3 +17,5 @@ Exp44_new_Dataset_3slices_mil;5;25;450;1e-05;mil;1.0;0.4;0.0001;False;[0];0.7348
 Exp43_new_Dataset_3slices_max;5;25;450;1e-05;max;1.0;0.4;0.0001;False;[0];0.5953453552425826;9;2025-02-06_13-20-22
 Exp44_new_Dataset_3slices_mil_train_vergleich;5;25;450;1e-05;mil;1.0;0.4;0.0001;False;[0];0.8379417935006345;17;2025-02-06_13-55-15
 Exp44_new_Dataset_3slices_max_train_vergleich;5;25;450;1e-05;max;1.0;0.4;0.0001;False;[0];0.7121697655275249;29;2025-02-06_14-27-35
+Exp45_new_Dataset_3slices_mil;5;35;450;1e-05;mil;1.0;0.4;0.0001;False;[0];0.6969009482429606;18;2025-02-06_16-31-09
+Exp46_new_Dataset_3slices_mil;5;25;450;1e-05;mil;1.5;0.4;0.0001;False;[0];0.5720475064333326;27;2025-02-06_17-28-43
