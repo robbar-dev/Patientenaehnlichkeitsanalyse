@@ -39,26 +39,3 @@ class TripletLoss(nn.Module):
         
         return loss
 
-if __name__ == "__main__":
-    # Test mit Dummy-Embeddings
-    batch_size = 4
-    embedding_dim = 512
-    
-    # Erstellen von Dummy-Daten
-    anchor = torch.randn(batch_size, embedding_dim)
-    positive = torch.randn(batch_size, embedding_dim)
-    negative = torch.randn(batch_size, embedding_dim)
-    
-    # Instanziierung der TripletLoss-Klasse
-    loss_fn = TripletLoss(margin=1.0)
-    
-    # Test ohne Normierung
-    print("### Ohne Normierung ###")
-    loss = loss_fn(anchor, positive, negative, normalize_embeddings=False)
-    print("Triplet Loss (ohne Normierung):", loss.item())
-    
-    # Test mit Normierung
-    print("\n### Mit Normierung ###")
-    loss = loss_fn(anchor, positive, negative, normalize_embeddings=True)
-    print("Triplet Loss (mit Normierung):", loss.item())
-

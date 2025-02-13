@@ -1,0 +1,2 @@
+epoch;train_total_loss;train_triplet_loss;val_precisionK;val_recallK;val_mAP
+1;0.9782;0.9782;0.1474;0.0398;0.1632
