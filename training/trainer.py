@@ -33,7 +33,8 @@ class TripletTrainerBase(nn.Module):
         agg_hidden_dim=128,
         agg_dropout=0.2,
         roi_size=(96,96,3),
-        overlap=(10,10,1)
+        overlap=(10,10,1), 
+        do_augmentation=False
     ):
         """
         Args:
@@ -60,6 +61,7 @@ class TripletTrainerBase(nn.Module):
         self.agg_dropout = agg_dropout
         self.roi_size = roi_size
         self.overlap = overlap
+        self.do_augmentation = do_augmentation
 
         # === 1) CNN-Backbone ===
         from model.base_cnn import BaseCNN
@@ -112,7 +114,9 @@ class TripletTrainerBase(nn.Module):
             pid=pid,
             study_yr=study_yr,
             roi_size=self.roi_size,
-            overlap=self.overlap
+            overlap=self.overlap, 
+            skip_factor=2,
+            do_augmentation=self.do_augmentation
         )
         loader = DataLoader(ds, batch_size=32, shuffle=False)
 

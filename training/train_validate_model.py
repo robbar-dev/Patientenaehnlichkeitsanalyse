@@ -65,6 +65,11 @@ def parse_args():
                         help="Pro-Epoch-Metriken in diese CSV schreiben.")
     parser.add_argument("--log_file", type=str, default="train_val.log",
                         help="Logfile-Pfad.")
+
+    # Augmentation-Flag
+    parser.add_argument("--do_augmentation", action="store_true",
+                        help="Wenn gesetzt, wird random Augmentation im SinglePatientDataset aktiviert.")
+
     return parser.parse_args()
 
 def setup_logging(log_file):
@@ -83,7 +88,6 @@ def parse_freeze_blocks(freeze_str):
     """
     if not freeze_str or freeze_str.lower()=="none":
         return None
-    # split by comma
     blocks = freeze_str.split(",")
     blocks = [int(x.strip()) for x in blocks]
     return blocks
@@ -100,6 +104,7 @@ def main():
 
     df_train = pd.read_csv(args.train_csv)
 
+    # Erstelle TrainerBase mit do_augmentation
     trainer = TripletTrainerBase(
         df=df_train,
         data_root=args.data_root,
@@ -109,7 +114,8 @@ def main():
         model_name=args.model_name,
         freeze_blocks=fb,
         agg_hidden_dim=args.agg_hidden_dim,
-        agg_dropout=args.agg_dropout
+        agg_dropout=args.agg_dropout,
+        do_augmentation=args.do_augmentation  
     )
 
     # Optional: Scheduler
@@ -121,7 +127,6 @@ def main():
         )
         logging.info(f"Scheduler: StepLR(step_size={args.step_size}, gamma={args.gamma})")
 
-    # Stats
     best_map = 0.0
     best_epoch = -1
 
@@ -129,7 +134,8 @@ def main():
 
     df_val = pd.read_csv(args.val_csv)
 
-    # Wir machen hier eine einfache Schleife
+    from evaluation.metrics import compute_embeddings, compute_precision_recall_map
+
     for epoch in range(1, args.epochs+1):
         logging.info(f"\n=== [TRAIN] EPOCH {epoch}/{args.epochs} ===")
         # Sampler
@@ -147,10 +153,8 @@ def main():
             current_lr = trainer.scheduler.get_last_lr()[0]
             logging.info(f"Nach Epoche {epoch}, LR={current_lr}")
 
-        # === Val
+        # Validation
         logging.info(f"=== [VAL] EPOCH {epoch}/{args.epochs} ===")
-        from evaluation.metrics import compute_embeddings, compute_precision_recall_map
-
         emb_dict = compute_embeddings(
             trainer=trainer,
             df=df_val,
@@ -194,7 +198,7 @@ def _save_epoch_csv(epoch_csv, epoch, trainer, val_metrics):
     total_loss = trainer.epoch_losses[-1]
     trip_loss  = trainer.epoch_triplet_losses[-1]
     precK = val_metrics["precision@K"]
-    recK  = val_metrics["recall@K"]
+    recK = val_metrics["recall@K"]
     mapv = val_metrics["mAP"]
 
     file_exists = os.path.exists(epoch_csv)
@@ -226,6 +230,7 @@ if __name__=="__main__":
     main()
 
 
+
 # python3.11 training\train_validate_model.py `
 #     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
 #     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\validation\nlst_subset_v5_validation.csv" `
@@ -237,7 +242,8 @@ if __name__=="__main__":
 #     --model_name resnet18 `
 #     --freeze_blocks "0,1" `
 #     --agg_hidden_dim 128 `
-#     --agg_dropout 0.2 `
+#     --agg_dropout 0.5 `
+#     --do_augmentation `
 #     --best_model_path "best_base_model.pt" `
 #     --device cuda `
 #     --distance_metric euclidean `
