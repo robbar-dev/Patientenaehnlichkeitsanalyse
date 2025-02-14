@@ -8,7 +8,7 @@ import torch.utils.data as data
 def rearrange_channels_torch(patch_t):
     """
     patch_t shape: (1, H, W, D)
-    Falls D == 3, wandeln wir das in (3, H, W) um
+    Falls D == 3 ->  (3, H, W) umwandeln
     """
     C, H, W, D = patch_t.shape
     if D == 3:

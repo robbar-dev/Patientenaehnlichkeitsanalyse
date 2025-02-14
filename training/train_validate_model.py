@@ -79,11 +79,10 @@ def setup_logging(log_file):
 
 def parse_freeze_blocks(freeze_str):
     """
-    Hilfsfunktion: "0,1" => [0,1], "None" => None
+    Hilfsfunktion: "0,1" -> [0,1], "None" -> None
     """
     if not freeze_str or freeze_str.lower()=="none":
         return None
-    # split by comma
     blocks = freeze_str.split(",")
     blocks = [int(x.strip()) for x in blocks]
     return blocks
@@ -129,7 +128,6 @@ def main():
 
     df_val = pd.read_csv(args.val_csv)
 
-    # Wir machen hier eine einfache Schleife
     for epoch in range(1, args.epochs+1):
         logging.info(f"\n=== [TRAIN] EPOCH {epoch}/{args.epochs} ===")
         # Sampler
@@ -173,7 +171,6 @@ def main():
             trainer.save_checkpoint(args.best_model_path)
             logging.info(f"=> New best mAP={best_map:.4f} @ epoch={best_epoch}, saved to {args.best_model_path}")
 
-        # CSV-Logging pro Epoche => epoch_csv
         if args.epoch_csv:
             _save_epoch_csv(
                 epoch_csv=args.epoch_csv,

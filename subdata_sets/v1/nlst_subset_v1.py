@@ -15,39 +15,30 @@ data_dir = r"M:\public_data\tcia_ml\nlst\ct"
 csv_path = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\DataSetV1\V1\nlst_subset_v1_all_pids.csv"
 output_csv_path = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\DataSetV1\V1\nlst_subset_v1.csv"
 
-# Laden der CSV-Datei mit den ausgewählten Patientengruppen
 nlst_df = pd.read_csv(csv_path, sep=';')
 
-# Erstellen einer neuen Spalte, die die Krankheitskombination repräsentiert
 nlst_df['combination'] = nlst_df[['LKM', '59', '61']].astype(str).agg('-'.join, axis=1)
 
-# Initialisierung von DataFrames für die ausgewählten Patienten
 selected_patients_df = pd.DataFrame()
 
-# Initialisierung der Listen für die Berichte
 series_report = []
 failed_patients_list = []
 
-# Anzahl der Patienten pro Kombination festlegen
 patients_per_combination = 1153
 
-# Für jede Kombination Patienten auswählen
 print("Starte Auswahl der Patienten pro Kombination...")
 
-# Dictionary, um die bereits ausgewählten Patienten-IDs pro Kombination zu speichern
 selected_pids_per_combination = {}
 
 for combination, group in nlst_df.groupby('combination'):
     print(f"\nVerarbeite Kombination {combination} mit {len(group)} Patienten.")
-    group = group.copy()  # Erstellen einer Kopie, um die Originaldaten nicht zu verändern
-    group['pid'] = group['pid'].astype(int)  # Stellen Sie sicher, dass die 'pid' als int behandelt wird
-    group['study_yr'] = group['study_yr'].astype(int)  # Stellen Sie sicher, dass 'study_yr' als int behandelt wird
+    group = group.copy()  # Kopie, um Originaldatei nicht zu ändern
+    group['pid'] = group['pid'].astype(int)  
+    group['study_yr'] = group['study_yr'].astype(int) 
 
-    # Initialisiere Menge der ausgewählten und fehlgeschlagenen Patienten-IDs für diese Kombination
     selected_patient_keys = set()
     failed_patient_keys = set()
 
-    # Während die Anzahl der ausgewählten Patienten kleiner als patients_per_combination ist
     while len(selected_patient_keys) < patients_per_combination:
         # Wähle die verbleibenden Patienten aus, die noch nicht verarbeitet wurden
         group['patient_key'] = list(zip(group['pid'], group['study_yr']))
@@ -65,7 +56,6 @@ for combination, group in nlst_df.groupby('combination'):
         # Pfad zum Patientenordner
         patient_path = os.path.join(data_dir, str(patient_id))
 
-        # Überprüfen, ob der Patientenordner existiert
         if not os.path.exists(patient_path):
             print(f"Patientenordner für PID {patient_id} nicht gefunden.")
             failed_patient_keys.add((patient_id, study_year))
@@ -79,7 +69,7 @@ for combination, group in nlst_df.groupby('combination'):
             if not os.path.isdir(folder_path):
                 continue
 
-            # Extrahieren des Jahres aus dem Ordnernamen mittels Regex
+            # Extrahieren des Jahres aus dem Ordnername
             match = re.match(r"\d{2}-\d{2}-(\d{4})", folder)
             if match:
                 year = int(match.group(1))
@@ -94,7 +84,6 @@ for combination, group in nlst_df.groupby('combination'):
                     else:
                         series_paths.append(study_path)
 
-        # Wenn keine Serien gefunden wurden
         if not series_paths:
             print(f"Keine Serien für PID {patient_id}, Studienjahr {desired_year} gefunden.")
             failed_patient_keys.add((patient_id, study_year))
@@ -114,12 +103,10 @@ for combination, group in nlst_df.groupby('combination'):
                 if num_slices == 0:
                     continue
 
-                # Lesen der ersten DICOM-Datei zur Extraktion der Metadaten
                 dicom = pydicom.dcmread(dicom_files[0], stop_before_pixels=True)
                 slice_thickness = getattr(dicom, 'SliceThickness', None)
                 pixel_spacing = getattr(dicom, 'PixelSpacing', None)
 
-                # Überprüfen der Qualitätskriterien
                 criteria_met = True
 
                 # Slice Thickness zwischen 1.0 mm und 2.5 mm
@@ -141,7 +128,7 @@ for combination, group in nlst_df.groupby('combination'):
                         "num_slices": num_slices,
                         "pixel_spacing": pixel_spacing
                     }
-                    break  # Beenden der Schleife, wenn eine passende Serie gefunden wurde
+                    break 
 
             except Exception as e:
                 print(f"Fehler beim Verarbeiten der Serie {series_path}: {e}")
@@ -164,12 +151,10 @@ for combination, group in nlst_df.groupby('combination'):
             failed_patients_list.append({"pid": patient_id, "study_yr": study_year, "reason": "Keine geeignete Serie gefunden", "combination": combination})
             print(f"Patient {patient_id}, Study Year {study_year} erfüllt nicht die Qualitätskriterien.")
 
-    # Speichern der ausgewählten Patienten-Keys pro Kombination
     selected_pids_per_combination[combination] = selected_patient_keys
 
 print("\nVerarbeitung abgeschlossen.")
 
-# Erstellung des Berichts
 print("\nErstelle Berichte...")
 report_df = pd.DataFrame(failed_patients_list)
 report_df.to_csv(r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\DataSetV1\V1\failed_patients_report.csv", index=False)
@@ -177,7 +162,7 @@ report_df.to_csv(r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensät
 series_report_df = pd.DataFrame(series_report)
 series_report_df.to_csv(r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\DataSetV1\V1\series_selection_report.csv", index=False)
 
-# Speichern der gefilterten Patienten, die die Qualitätsprüfung bestanden haben
+
 passed_df = selected_patients_df
 passed_df.to_csv(output_csv_path, index=False)
 print(f"Das gefilterte Subset wurde in {output_csv_path} gespeichert.")

@@ -18,7 +18,6 @@ from monai.transforms import (
 from monai.data import Dataset, DataLoader, pad_list_data_collate
 import nibabel as nib
 
-# Logging einrichten
 logging.basicConfig(
     filename="resample_normalize.log",
     level=logging.INFO,
@@ -37,7 +36,6 @@ def resample_and_normalize(
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    # SaveImage Transform initialisieren
     save_transform = SaveImage(
         output_dir=output_dir,
         output_postfix="",
@@ -71,15 +69,11 @@ def resample_and_normalize(
         if f.endswith(".nii") or f.endswith(".nii.gz")
     ]
 
-    # Warnung ausgeben, wenn keine Dateien gefunden wurden
     if not nifti_files:
-        logging.warning(f"Keine NIfTI-Dateien im Verzeichnis {input_dir} gefunden.")
         print(f"Warnung: Keine NIfTI-Dateien im Verzeichnis {input_dir} gefunden.")
         return
 
-    # Liste der bereits verarbeiteten Dateien erstellen
     processed_filenames = set(os.listdir(output_dir))
-    # Falls die Ausgabedateien die gleiche Erweiterung haben wie die Eingabedateien
     processed_files = set()
     for fname in processed_filenames:
         if fname.endswith(".nii") or fname.endswith(".nii.gz"):
@@ -94,7 +88,6 @@ def resample_and_normalize(
         filename = os.path.basename(file_path)
         output_file_path = os.path.join(output_dir, filename)
 
-        # Überprüfen, ob die Ausgabedatei bereits existiert
         if filename in processed_files:
             print(f"Datei {filename} bereits verarbeitet. Überspringe...")
             logging.info(f"Datei {filename} bereits verarbeitet. Überspringe...")
@@ -102,7 +95,6 @@ def resample_and_normalize(
             continue
 
         try:
-            # Versuch, die Datei mit nibabel zu laden
             nib.load(file_path)
             valid_nifti_files.append(file_dict)
         except Exception as e:
@@ -114,11 +106,9 @@ def resample_and_normalize(
 
     # Überprüfen, ob nach der Validierung noch Dateien übrig sind
     if not valid_nifti_files:
-        logging.warning(f"Keine gültigen und unverarbeiteten NIfTI-Dateien im Verzeichnis {input_dir} gefunden.")
         print(f"Warnung: Keine gültigen und unverarbeiteten NIfTI-Dateien im Verzeichnis {input_dir} gefunden.")
         return
 
-    # Dataset mit den validen Dateien erstellen
     dataset = Dataset(data=valid_nifti_files, transform=transforms)
     loader = DataLoader(
         dataset,
@@ -135,16 +125,13 @@ def resample_and_normalize(
             batch_size_actual = len(batch_data["image"])
             for i in range(batch_size_actual):
                 image = batch_data["image"][i]
-                # Metadaten aus dem MetaTensor abrufen
                 meta = image.meta
                 filename = os.path.basename(meta["filename_or_obj"])
 
-                # Debugging-Ausgabe
                 print(f"Verarbeite Datei: {filename}")
                 print(f"Bildform: {image.shape}")
                 print(f"Verfügbare Metadaten-Schlüssel: {list(meta.keys())}")
 
-                # Daten speichern mit SaveImage
                 save_transform(
                     img=image,
                     meta_data=meta,
@@ -152,7 +139,6 @@ def resample_and_normalize(
                 )
                 print(f"Datei gespeichert: {os.path.join(output_dir, filename)}")
 
-                # Optional: Visualisierung
                 if visualize:
                     print("Visualisierung wird ausgeführt.")
                     depth = image.shape[-1]

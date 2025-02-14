@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 
 class TripletTrainerBase(nn.Module):
     """
-    Abgespecktes Base Model:
+    Base Model:
      - ResNet18/50 (BaseCNN, param: model_name)
      - Optionale Freeze-Blocks
      - Attention-MIL (param: agg_hidden_dim, agg_dropout)
@@ -46,7 +46,7 @@ class TripletTrainerBase(nn.Module):
           freeze_blocks: Liste oder None, z.B. [0,1] => ResNet-Layer1, Layer2
           agg_hidden_dim: Hidden-Dim im Attention-MLP
           agg_dropout: Dropout-Rate
-          roi_size, overlap: Falls du Patches definieren möchtest
+          roi_size, overlap: Patch-Extraktion
         """
         super().__init__()
         self.df = df
@@ -61,7 +61,7 @@ class TripletTrainerBase(nn.Module):
         self.roi_size = roi_size
         self.overlap = overlap
 
-        # === 1) CNN-Backbone ===
+        # 1) CNN-Backbone
         from model.base_cnn import BaseCNN
         self.base_cnn = BaseCNN(
             model_name=self.model_name,
@@ -69,7 +69,7 @@ class TripletTrainerBase(nn.Module):
             freeze_blocks=self.freeze_blocks
         ).to(device)
 
-        # === 2) Aggregator (Gated-Attention-MIL) ===
+        # 2) Aggregator 
         from model.mil_aggregator import AttentionMILAggregator
         self.mil_agg = AttentionMILAggregator(
             in_dim=512,
@@ -77,14 +77,14 @@ class TripletTrainerBase(nn.Module):
             dropout=self.agg_dropout
         ).to(device)
 
-        # === 3) TripletLoss ===
+        # 3) TripletLoss
         self.triplet_loss_fn = nn.TripletMarginLoss(margin=self.margin, p=2)
 
-        # === 4) Optimizer ===
+        # 4) Optimizer 
         params = list(self.base_cnn.parameters()) + list(self.mil_agg.parameters())
         self.optimizer = optim.Adam(params, lr=self.lr)
 
-        # === Tracking ===
+        # Tracking
         self.epoch_losses = []          # Gesamt-Loss pro Epoche
         self.epoch_triplet_losses = []  # Nur Triplet-Loss pro Epoche
 
@@ -137,7 +137,7 @@ class TripletTrainerBase(nn.Module):
     def train_one_epoch(self, sampler):
         """
         Verwendet TripletSampler => (anchor_info, pos_info, neg_info)
-        => Anchor, Positive, Negative => TripletLoss
+        -> Anchor, Positive, Negative -> TripletLoss
         """
         total_loss = 0.0
         total_trip = 0.0
@@ -211,11 +211,9 @@ class TripletTrainerBase(nn.Module):
             if not os.path.exists(epoch_csv_path):
                 with open(epoch_csv_path, mode='w', newline='') as f:
                     writer = csv.writer(f, delimiter=';')
-                    # Wir hängen hier z.B. noch die Hyperparams in den Header an
                     header = [
                         "Epoch", "TotalLoss", "TripletLoss",
                         "Precision@K", "Recall@K", "mAP",
-                        # Zusätzliche Felder, die z. B. im Header stehen
                         f"model_name={self.model_name}",
                         f"freeze_blocks={self.freeze_blocks}",
                         f"agg_hidden_dim={self.agg_hidden_dim}",
@@ -274,8 +272,7 @@ class TripletTrainerBase(nn.Module):
                 self.best_val_map = map_val
                 self.best_val_epoch = epoch
                 logging.info(f"=> New Best mAP={map_val:.4f} @ epoch={epoch}")
-
-            # 3) Visualisierung (optional)
+                
             if epoch % visualize_every == 0:
                 self.visualize_embeddings(
                     df=df_val,

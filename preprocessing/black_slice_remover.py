@@ -40,11 +40,7 @@ def remove_black_slices(volume_np):
 
     # Falls ALLE Slices schwarz sind:
     if first_non_zero is None or last_non_zero is None:
-        # Option 1: Volumen komplett zurückgeben (nicht cropped)
-        # return volume_np
-
-        # Option 2: Leeres Array oder 1 Slice zurückgeben
-        # Hier: Gibt das Original zurück, um Abstürze zu vermeiden.
+        # Volumen komplett zurückgeben (nicht cropped)
         return volume_np
 
     # Schneide die Slices weg, die komplett schwarz sind

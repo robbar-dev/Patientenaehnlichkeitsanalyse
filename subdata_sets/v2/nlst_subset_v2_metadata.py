@@ -4,19 +4,18 @@ import pydicom
 import re
 import json
 
-# Pfade
-csv_path = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V2\nlst_subset_v2_ausgeglichen_ohnePaths.csv"  # Pfad zur CSV-Datei
-data_root = r"M:\public_data\tcia_ml\nlst\ct"  # Wurzelverzeichnis der Bilddaten
-output_csv_path = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V2\nlst_subset_v2.csv"  # Speichern des Ergebnisses
-log_file_path = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V2\fehlerlogs.txt"  # Log-Datei für fehlende oder problematische Fälle
-output_json_path = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V2\output_file.json"  # Ausgabe-JSON
+
+csv_path = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V2\nlst_subset_v2_ausgeglichen_ohnePaths.csv"  
+data_root = r"M:\public_data\tcia_ml\nlst\ct"  
+output_csv_path = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V2\nlst_subset_v2.csv"  
+log_file_path = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V2\fehlerlogs.txt"  
+output_json_path = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V2\output_file.json"  
 
 def prioritize_series(series_metadata, single_folder):
     """Priorisiert Serien basierend auf den Auswahlkriterien."""
     priorities = {"STANDARD": 1, "LUNG": 2, "BONE": 3, "OTHER": 4, "onlyOne": 5}
     
     if single_folder and not series_metadata:
-        # Kein Match für Standard, Lung, Bone → Markiere als onlyOne
         return {
             "priority": "onlyOne",
             "SliceThickness": float('inf'),
@@ -34,12 +33,12 @@ def prioritize_series(series_metadata, single_folder):
             min(x['PixelSpacing']) if x['PixelSpacing'] else float('inf')  # Feineres PixelSpacing bevorzugt
         )
     )
-    return sorted_series[0]  # Höchstpriorisierte Serie zurückgeben
+    return sorted_series[0]  
 
 def find_series_with_priority(data_root, csv_df, log_file_path):
     mappings = []
     metadata_list = []
-    errors = []  # Liste für Fehler, die in die Log-Datei geschrieben werden
+    errors = []
 
     total_patients = len(csv_df)
     for idx, row in csv_df.iterrows():
@@ -49,15 +48,13 @@ def find_series_with_priority(data_root, csv_df, log_file_path):
 
         print(f"[{idx+1}/{total_patients}] Verarbeite PID {pid}, Studienjahr {study_yr}")
         
-        # Pfad zum Patientenordner
         patient_path = os.path.join(data_root, str(pid))
         if not os.path.exists(patient_path):
             errors.append(f"Patientenordner für PID {pid} nicht gefunden.")
             continue
 
-        # Durchsuchen der Study-Year-Ordner
         series_metadata = []
-        single_folder_path = None  # Pfad, falls nur ein Unterordner vorhanden ist
+        single_folder_path = None 
         study_path = None
 
         for folder in os.listdir(patient_path):
@@ -125,7 +122,6 @@ def find_series_with_priority(data_root, csv_df, log_file_path):
         else:
             errors.append(f"Warnung: Keine passende Serie gefunden für PID {pid}, Studienjahr {desired_year}.")
 
-    # Fehler in Log-Datei schreiben, falls vorhanden
     if errors:
         with open(log_file_path, 'w') as log_file:
             log_file.write("\n".join(errors))
@@ -139,7 +135,7 @@ def sanitize_metadata(metadata_list):
         sanitized_item = {}
         for key, value in item.items():
             if isinstance(value, (list, tuple)):
-                sanitized_item[key] = list(value)  # Konvertiere zu Liste
+                sanitized_item[key] = list(value)  
             elif isinstance(value, (int, float, str)) or value is None:
                 sanitized_item[key] = value  # Belasse kompatible Typen
             else:
@@ -147,13 +143,9 @@ def sanitize_metadata(metadata_list):
         sanitized_list.append(sanitized_item)
     return sanitized_list
 
-# CSV laden
+
 csv_df = pd.read_csv(csv_path)
-
-# Serien mit Priorisierung finden
 mappings, metadata_list = find_series_with_priority(data_root, csv_df, log_file_path)
-
-# Bereinige Metadaten für JSON
 sanitized_metadata_list = sanitize_metadata(metadata_list)
 
 # Ergebnis speichern
@@ -166,4 +158,4 @@ print(f"Metadaten gespeichert unter: {output_json_path}")
 if os.path.exists(log_file_path):
     print(f"Fehler-Log erstellt unter: {log_file_path}")
 else:
-    print("Keine Fehler aufgetreten. Log-Datei wurde nicht erstellt.")
+    print("Keine Fehler aufgetreten.")

@@ -3,21 +3,15 @@ import pandas as pd
 import glob
 
 def delete_nifti_files(deleted_pids_csv, nifti_folder):
-    # CSV-Datei einlesen
     df = pd.read_csv(deleted_pids_csv, sep=';', dtype={'pid': str, 'study_yr': str})
-    # Sicherstellen, dass 'pid' und 'study_yr' Strings sind
-
-    # Über jeden Eintrag in der CSV-Datei iterieren
     for index, row in df.iterrows():
         pid = row['pid'].strip()
         study_yr = row['study_yr'].strip()
 
-        # Suchmuster für die Dateien erstellen
-        # Behandeln von möglichen Variationen im Dateinamen
         pattern = f"pid_{pid}_study_yr_{study_yr}*.nii*"
         search_pattern = os.path.join(nifti_folder, pattern)
 
-        # Alle passenden Dateien suchen
+        # Alle matching Datein suchen
         matching_files = glob.glob(search_pattern)
         if matching_files:
             for filepath in matching_files:

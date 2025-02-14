@@ -5,7 +5,6 @@ import torchvision.models as models
 class BaseCNN(nn.Module):
     """
     Erzeugt ein ResNet-Backbone für Feature-Extraktion, 
-    optional mit (teilweisem) Freezing bestimmter Blöcke.
 
     Bei ResNet18 -> Feature-Dimension = 512 
     Bei ResNet50 -> Feature-Dimension = 2048
@@ -28,7 +27,7 @@ class BaseCNN(nn.Module):
         """
         super(BaseCNN, self).__init__()
 
-        # 1) Lade das gewünschte ResNet-Modell
+        # 1) Lade ResNet-Modell
         if model_name == 'resnet18':
             if pretrained:
                 self.resnet = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
@@ -47,10 +46,10 @@ class BaseCNN(nn.Module):
         # 2) Entferne den letzten Fully-Connected-Layer
         #    => Alles behalten bis kurz vor self.resnet.fc
         #    => in children() sind: conv1, bn1, relu, maxpool, layer1, layer2, layer3, layer4, avgpool, fc
-        #    => [:-1] => wir behalten avgpool, entfernen fc
+        #    => [:-1] -> avgpool behalten, fc entfernen 
         self.resnet = nn.Sequential(*list(self.resnet.children())[:-1])
 
-        # 3) Optional: Blöcke einfrieren
+        # 3) Blöcke einfrieren
         self.freeze_blocks = freeze_blocks
         if freeze_blocks is not None:
             self._apply_block_freezing()
