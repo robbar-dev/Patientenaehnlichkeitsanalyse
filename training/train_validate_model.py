@@ -102,7 +102,10 @@ def main():
     fb = parse_freeze_blocks(args.freeze_blocks)
     logging.info(f"Freeze-Blocks: {fb}, model_name={args.model_name}")
 
-    df_train = pd.read_csv(args.train_csv)
+    df_train = pd.read_csv(
+        args.train_csv,
+        dtype={"study_yr": str} # 0er für HEAD-NECK-Datensatz müssen übernommen werden
+    )
 
     trainer = TripletTrainerBase(
         df=df_train,
@@ -131,7 +134,10 @@ def main():
 
     from training.triplet_sampler import TripletSampler
 
-    df_val = pd.read_csv(args.val_csv)
+    df_val = pd.read_csv(
+        args.val_csv,
+        dtype={"study_yr": str}  # 0er Prob für HEAD-NECK-Datensatz
+    )
 
     from evaluation.metrics import compute_embeddings, compute_precision_recall_map
 
@@ -234,8 +240,8 @@ if __name__=="__main__":
 #     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\head_vs_lung\training\nlst_subset_v5_head_vs_lung_training.csv" `
 #     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\head_vs_lung\val\nlst_subset_v5_head_vs_lung_val.csv" `
 #     --data_root "D:\thesis_robert\head_vs_lung" `
-#     --epochs 30 `
-#     --num_triplets 1000 `
+#     --epochs 15 `
+#     --num_triplets 350 `
 #     --lr 1e-5 `
 #     --margin 1.0 `
 #     --model_name resnet18 `
@@ -246,6 +252,6 @@ if __name__=="__main__":
 #     --best_model_path "best_base_model.pt" `
 #     --device cuda `
 #     --distance_metric euclidean `
-#     --K 10 `
+#     --K 5 `
 #     --epoch_csv "epoch_metrics_base_model.csv" `
 #     --log_file "train_val.log"

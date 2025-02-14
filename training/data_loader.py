@@ -73,22 +73,23 @@ class SinglePatientDataset(data.Dataset):
         self.skip_factor = skip_factor
         self.do_augmentation = do_augmentation
 
-        # Pfad zur NIfTI-Datei
-        fn_prefix = f"pid_{pid}_study_yr_{study_yr}"
+        fn_prefix = f"pid_{pid}_"
+        fn_substr = f"study_yr_{study_yr}"
+
         self.nii_path = None
         for fname in os.listdir(self.data_root):
-            if fname.startswith(fn_prefix) and fname.endswith(".nii.gz"):
+            if fname.startswith(fn_prefix) and (fn_substr in fname) and fname.endswith(".nii.gz"):
                 self.nii_path = os.path.join(self.data_root, fname)
                 break
 
         self.patches = []
 
-        if os.path.exists(self.nii_path):
+        if self.nii_path and os.path.exists(self.nii_path):
             self.prepare_patches()
         else:
-            # Falls Datei nicht existiert => leere Patches
             self.patches = []
-            print(f"Warnung: Keine passende Datei für {fn_prefix} gefunden! Die Patches-Liste ist leer.")
+            print(f"Warnung: Keine passende Datei für pid={pid}, study_yr={study_yr} gefunden!")
+
 
     def prepare_patches(self):
         # 1) NIfTI => (H,W,D)
