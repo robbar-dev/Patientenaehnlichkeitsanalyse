@@ -56,7 +56,7 @@ def main():
 
     df_test = pd.read_csv(args.test_csv)
 
-    # Wir erstellen einen leeren TrainerBase (ohne df), laden dann die Weights
+    # Erstellung des TrainerBase (ohne df) und laden die Weights
     trainer = TripletTrainerBase(
         df=None,  # None, da nur Inference 
         data_root=args.data_root,
@@ -65,10 +65,9 @@ def main():
         margin=1.0
     )
 
-    # Lade Checkpoint
     trainer.load_checkpoint(args.model_path)
 
-    # => Evaluate
+    # Evaluate
     emb_dict = compute_embeddings(
         trainer=trainer,
         df=df_test,

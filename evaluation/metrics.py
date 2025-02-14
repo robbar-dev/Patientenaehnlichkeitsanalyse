@@ -5,9 +5,8 @@ import pandas as pd
 
 # from training.data_loader import SinglePatientDataset
 
-################################################################################
+
 # 1) compute_embeddings
-################################################################################
 def compute_embeddings(
     trainer,
     df,
@@ -36,9 +35,7 @@ def compute_embeddings(
     return embeddings
 
 
-################################################################################
 # 2) compute_precision_recall_map
-################################################################################
 def compute_precision_recall_map(
     embeddings,
     K=10,
@@ -124,10 +121,7 @@ def compute_precision_recall_map(
     }
     return result
 
-
-################################################################################
 # 3) evaluate_model
-################################################################################
 def evaluate_model(
     trainer,
     data_csv,

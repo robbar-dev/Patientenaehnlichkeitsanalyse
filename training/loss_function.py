@@ -30,7 +30,7 @@ class TripletLoss(nn.Module):
         # Berechnung der Triplet Loss
         loss = self.loss_fn(anchor, positive, negative)
         
-        # Debugging-Informationen (optional)
+        # Debugging-Informationen
         with torch.no_grad():
             distance_positive = torch.norm(anchor - positive, p=2, dim=1)
             distance_negative = torch.norm(anchor - negative, p=2, dim=1)
