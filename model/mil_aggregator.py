@@ -6,14 +6,8 @@ import logging
 class AttentionMILAggregator(nn.Module):
     """
     Gated-Attention-MIL-Implementierung (nach Ilse et al. 2018) mit Dropout.
-    Für jeden Patch berechnen wir einen Score und gewichten die Patch-Features
+    Für jeden Patch berechnen wird ein Score berechnet und gewichten die Patch-Features
     mittels Softmax. Dadurch lernt das Modell, welche Patches wichtiger sind.
-
-    Kerngedanke:
-      - 'Gated' bedeutet, wir haben zwei Pfade (Tanh und Sigmoid),
-        die elementweise multipliziert werden (Gate).
-      - Anschließend berechnen wir daraus einen linearen Score pro Patch,
-        normalisieren via Softmax und summieren gewichtet.
     """
 
     def __init__(self, in_dim=512, hidden_dim=128, dropout=0.2):
@@ -61,7 +55,6 @@ class AttentionMILAggregator(nn.Module):
         h = u * v
 
         # 4) Dropout
-        #    Regulierung gegen Overfitting
         h = self.dropout(h)  # => (N, hidden_dim)
 
         # 5) End-Scoring => w_layer(h) => shape (N,1), squeeze -> (N)

@@ -11,7 +11,7 @@ def parse_combo_string(combo_str):
 def label_distance(a, b):
     """
     a, b = Tupel, z. B. (0,1,1)
-    Distance = -#gemeinsamer1en
+    Distance -> gemeinsamer1en
     => je weniger Overlap, desto größer die Distance
     """
     shared_ones = sum(x & y for x,y in zip(a,b))
@@ -79,7 +79,7 @@ class TripletSampler:
             )
             self.distRanking[c] = combos_sorted
 
-        # 3) "Ohne Zurücklegen" => set()
+        # 3) "Ohne Zurücklegen" -> set()
         self.used_triplets = set()
 
     def __iter__(self):
@@ -96,7 +96,6 @@ class TripletSampler:
             anchor_combo = random.choice(self.all_combos)
             anchor_patients = self.labels_to_patients[anchor_combo]
             
-            # Wenn anchor_patients < 1, skip => kann passieren, falls leere combo
             if len(anchor_patients) < 1:
                 if DEBUG:
                     print(f"[Attempt {attempts}] anchor_combo={anchor_combo} has no patients => skip")
@@ -138,7 +137,7 @@ class TripletSampler:
                     print(f"[Attempt {attempts}] trip_id={trip_id} already used => skip")
                 continue
 
-            # Everything OK => accept
+            # Everything OK -> accept
             self.used_triplets.add(trip_id)
             if DEBUG:
                 print(f"[Attempt {attempts}] => SUCCESS, anchorC={anchor_combo}, negC={neg_combo}, PIDs={anchor_info['pid']},{pos_info['pid']},{neg_info['pid']}")
@@ -153,8 +152,8 @@ class TripletSampler:
 
     def reset_epoch(self):
         """
-        Leert used_triplets => 
-        nächste Epoche kann dieselben PIDs neu nutzen
+        Leert used_triplets
+        -> nächste Epoche kann dieselben PIDs neu nutzen
         """
         if DEBUG:
             print("[TripletSampler] reset_epoch called, clearing used_triplets.")

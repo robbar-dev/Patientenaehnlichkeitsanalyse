@@ -104,7 +104,6 @@ def main():
 
     df_train = pd.read_csv(args.train_csv)
 
-    # Erstelle TrainerBase mit do_augmentation
     trainer = TripletTrainerBase(
         df=df_train,
         data_root=args.data_root,
@@ -177,7 +176,7 @@ def main():
             trainer.save_checkpoint(args.best_model_path)
             logging.info(f"=> New best mAP={best_map:.4f} @ epoch={best_epoch}, saved to {args.best_model_path}")
 
-        # CSV-Logging pro Epoche => epoch_csv
+        # CSV-Logging pro Epoche
         if args.epoch_csv:
             _save_epoch_csv(
                 epoch_csv=args.epoch_csv,

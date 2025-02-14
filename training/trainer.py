@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 
 class TripletTrainerBase(nn.Module):
     """
-    Abgespecktes Base Model:
+    Base Model:
      - ResNet18/50 (BaseCNN, param: model_name)
      - Optionale Freeze-Blocks
      - Attention-MIL (param: agg_hidden_dim, agg_dropout)
@@ -63,7 +63,7 @@ class TripletTrainerBase(nn.Module):
         self.overlap = overlap
         self.do_augmentation = do_augmentation
 
-        # === 1) CNN-Backbone ===
+        # 1) CNN-Backbone 
         from model.base_cnn import BaseCNN
         self.base_cnn = BaseCNN(
             model_name=self.model_name,
@@ -71,7 +71,7 @@ class TripletTrainerBase(nn.Module):
             freeze_blocks=self.freeze_blocks
         ).to(device)
 
-        # === 2) Aggregator (Gated-Attention-MIL) ===
+        # 2) Aggregator 
         from model.mil_aggregator import AttentionMILAggregator
         self.mil_agg = AttentionMILAggregator(
             in_dim=512,
@@ -79,14 +79,14 @@ class TripletTrainerBase(nn.Module):
             dropout=self.agg_dropout
         ).to(device)
 
-        # === 3) TripletLoss ===
+        # 3) TripletLoss
         self.triplet_loss_fn = nn.TripletMarginLoss(margin=self.margin, p=2)
 
-        # === 4) Optimizer ===
+        # 4) Optimizer
         params = list(self.base_cnn.parameters()) + list(self.mil_agg.parameters())
         self.optimizer = optim.Adam(params, lr=self.lr)
 
-        # === Tracking ===
+        # Tracking
         self.epoch_losses = []          # Gesamt-Loss pro Epoche
         self.epoch_triplet_losses = []  # Nur Triplet-Loss pro Epoche
 
@@ -126,7 +126,7 @@ class TripletTrainerBase(nn.Module):
         patch_embs = []
         for patch_t in loader:
             patch_t = patch_t.to(self.device)
-            emb = self.base_cnn(patch_t)  # => (B,512)
+            emb = self.base_cnn(patch_t)  # (B,512)
             patch_embs.append(emb)
 
         if len(patch_embs)==0:
@@ -215,11 +215,9 @@ class TripletTrainerBase(nn.Module):
             if not os.path.exists(epoch_csv_path):
                 with open(epoch_csv_path, mode='w', newline='') as f:
                     writer = csv.writer(f, delimiter=';')
-                    # Wir hängen hier z.B. noch die Hyperparams in den Header an
                     header = [
                         "Epoch", "TotalLoss", "TripletLoss",
                         "Precision@K", "Recall@K", "mAP",
-                        # Zusätzliche Felder, die z. B. im Header stehen
                         f"model_name={self.model_name}",
                         f"freeze_blocks={self.freeze_blocks}",
                         f"agg_hidden_dim={self.agg_hidden_dim}",
@@ -253,7 +251,7 @@ class TripletTrainerBase(nn.Module):
             self.train_one_epoch(sampler)
             sampler.reset_epoch()
 
-            # 2) Evaluate => IR-Metriken (Precision@K, Recall@K, mAP)
+            # 2) Evaluate -> IR-Metriken
             emb_dict = compute_embeddings(
                 trainer=self,
                 df=df_val,
@@ -279,7 +277,7 @@ class TripletTrainerBase(nn.Module):
                 self.best_val_epoch = epoch
                 logging.info(f"=> New Best mAP={map_val:.4f} @ epoch={epoch}")
 
-            # 3) Visualisierung (optional)
+            # 3) Visualisierung
             if epoch % visualize_every == 0:
                 self.visualize_embeddings(
                     df=df_val,
@@ -325,7 +323,7 @@ class TripletTrainerBase(nn.Module):
 
     def compute_patient_embedding(self, pid, study_yr):
         """
-        Für Evaluate => berechnet patient_emb (1,512) => IR-Metriken
+        Für Evaluate -> berechnet patient_emb (1,512) -> IR-Metriken
         """
         from training.data_loader import SinglePatientDataset
         ds = SinglePatientDataset(

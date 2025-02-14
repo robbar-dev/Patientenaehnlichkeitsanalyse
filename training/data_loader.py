@@ -77,8 +77,6 @@ class SinglePatientDataset(data.Dataset):
         fn_prefix = f"pid_{pid}_study_yr_{study_yr}"
         self.nii_path = None
         for fname in os.listdir(self.data_root):
-            # Prüfe, ob der Dateiname mit pid_{pid}_study_yr_{study_yr} beginnt
-            # und auf .nii.gz endet.
             if fname.startswith(fn_prefix) and fname.endswith(".nii.gz"):
                 self.nii_path = os.path.join(self.data_root, fname)
                 break
