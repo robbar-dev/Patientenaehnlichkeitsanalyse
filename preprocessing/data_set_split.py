@@ -25,25 +25,22 @@ def split_csv_balanced(
       random_state: für reproducible Shuffle
     """
 
-    # 1) CSV einlesen
     df = pd.read_csv(input_csv)
     # Erwartet Spalten: 'pid', 'study_yr', 'combination'
 
-    # 2) Check summation
+    # Check summation
     total_ratio = train_ratio + val_ratio + test_ratio
     if abs(total_ratio - 1.0) > 1e-6:
         raise ValueError(f"Train/Val/Test Ration sum != 1.0 ({total_ratio})")
 
-    # 3) Container für Train/Val/Test
     df_train_list = []
     df_val_list = []
     df_test_list = []
 
-    # 4) Gruppierung nach combination
     group_col = 'combination'
     grouped = df.groupby(group_col)
 
-    # 5) Schleife über jede Kategorie
+    # Schleife über jede Kategorie
     for combo, group_df in grouped:
         # Shuffle die Zeilen dieser Gruppe
         group_df = group_df.sample(frac=1.0, random_state=random_state).reset_index(drop=True)
@@ -54,22 +51,20 @@ def split_csv_balanced(
         # rest geht in test
         n_test  = n - n_train - n_val
 
-        # 6) Indizes für Split
+        # Indizes für Split
         train_df = group_df.iloc[:n_train]
         val_df   = group_df.iloc[n_train:n_train + n_val]
         test_df  = group_df.iloc[n_train + n_val:]
 
-        # 7) an die globalen Listen anhängen
+        # an die globalen Listen anhängen
         df_train_list.append(train_df)
         df_val_list.append(val_df)
         df_test_list.append(test_df)
 
-    # 8) Alle Kategorien-Teil-Datenframes zusammenführen
     df_train = pd.concat(df_train_list, ignore_index=True)
     df_val   = pd.concat(df_val_list,   ignore_index=True)
     df_test  = pd.concat(df_test_list,  ignore_index=True)
 
-    # 9) Output als CSV
     df_train.to_csv(output_train_csv, index=False)
     df_val.to_csv(output_val_csv,       index=False)
     df_test.to_csv(output_test_csv,     index=False)
@@ -80,10 +75,10 @@ def split_csv_balanced(
           f"  Test:  {len(df_test)} Zeilen")
 
 if __name__ == "__main__":
-    input_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\nlst_subset_v5.csv"
-    out_train = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv"
-    out_val   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\validation\nlst_subset_v5_validation.csv"
-    out_test  = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\test\nlst_subset_v5_test.csv"
+    input_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\head_vs_lung\head_vs_lung_dataset.csv"
+    out_train = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\head_vs_lung\training\nlst_subset_v5_head_vs_lung_training.csv"
+    out_val   = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\head_vs_lung\val\nlst_subset_v5_head_vs_lung_val.csv"
+    out_test  = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\head_vs_lung\test\nlst_subset_v5_head_vs_lung_test.csv"
 
     split_csv_balanced(
         input_csv=input_csv,

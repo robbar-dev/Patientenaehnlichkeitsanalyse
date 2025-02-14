@@ -231,9 +231,9 @@ if __name__=="__main__":
 
 
 # python3.11 training\train_validate_model.py `
-#     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
-#     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\validation\nlst_subset_v5_validation.csv" `
-#     --data_root "D:\thesis_robert\subset_v5\NLST_subset_v5_nifti_3mm_Voxel" `
+#     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\head_vs_lung\training\nlst_subset_v5_head_vs_lung_training.csv" `
+#     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\head_vs_lung\val\nlst_subset_v5_head_vs_lung_val.csv" `
+#     --data_root "D:\thesis_robert\head_vs_lung" `
 #     --epochs 30 `
 #     --num_triplets 1000 `
 #     --lr 1e-5 `
