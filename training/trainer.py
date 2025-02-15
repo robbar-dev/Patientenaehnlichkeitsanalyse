@@ -356,7 +356,6 @@ class TripletTrainerBase(nn.Module):
                              epoch=0, output_dir='plots'):
         import os
         from sklearn.manifold import TSNE
-        from sklearn.decomposition import PCA
         import matplotlib.pyplot as plt
         import numpy as np
 
@@ -369,15 +368,13 @@ class TripletTrainerBase(nn.Module):
             combo = row['combination']
 
             emb = self.compute_patient_embedding(pid, study_yr)
-            emb_np = emb.squeeze(0).cpu().numpy()
+            emb_np = emb.squeeze(0).detach().cpu().numpy()
             embeddings_list.append(emb_np)
             combos.append(combo)
 
         embeddings_arr = np.array(embeddings_list)
-        if method.lower() == 'tsne':
-            projector = TSNE(n_components=2, random_state=42)
-        else:
-            projector = PCA(n_components=2, random_state=42)
+       
+        projector  = TSNE(n_components=2, random_state=42)
 
         coords_2d = projector.fit_transform(embeddings_arr)
 
@@ -387,7 +384,7 @@ class TripletTrainerBase(nn.Module):
             idxs = [ix for ix, val in enumerate(combos) if val==c]
             plt.scatter(coords_2d[idxs,0], coords_2d[idxs,1], label=str(c), alpha=0.6)
 
-        plt.title(f"{method.upper()} Embeddings - EPOCH={epoch}")
+        plt.title(f"t-SNE Embeddings - EPOCH={epoch}")
         plt.legend(loc='best')
 
         aggregator_name = getattr(self.mil_agg, '__class__').__name__

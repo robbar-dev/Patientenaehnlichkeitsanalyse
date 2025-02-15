@@ -185,6 +185,16 @@ def main():
                 val_metrics=val_metrics
             )
 
+        # Visualisierung t-SNE
+        if epoch % 5 == 0: 
+            trainer.visualize_embeddings(
+                df=df_val,
+                data_root=args.data_root,
+                method='tsne',
+                epoch=epoch, 
+                output_dir='plots'
+            )
+
     logging.info(f"Training DONE. Best epoch={best_epoch} with Val-mAP={best_map:.4f}.")
 
 def _save_epoch_csv(epoch_csv, epoch, trainer, val_metrics):
