@@ -187,75 +187,12 @@ def main():
 if __name__=="__main__":
     main()
 
-#-------------ohne Hard Mining----------------
-# python3.11 training\train_validate_model.py `
-#     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
-#     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
-#     --data_root "D:\thesis_robert\subset_v5\NLST_subset_v5_nifti_3mm_Voxel" `
-#     --epochs_stage1 30 `
-#     --num_triplets 1000 `
-#     --lr 1e-5 `
-#     --margin 1.0 `
-#     --model_name resnet18 `
-#     --freeze_blocks "0" `
-#     --agg_hidden_dim 128 `
-#     --agg_dropout 0.2 `
-#     --best_model_path "best_base_model.pt" `
-#     --device cuda `
-#     --distance_metric euclidean `
-#     --K 10 `
-#     --epoch_csv "epoch_metrics_base_model.csv" `
-#     --log_file "train_val.log"
-
-#-------------mit Hard Mining ohne Augmentierung ----------------
-# python3.11 training\train_validate_model.py `
-#     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
-#     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
-#     --data_root "D:\thesis_robert\subset_v5\NLST_subset_v5_nifti_3mm_Voxel" `
-#     --epochs_stage1 5 `
-#     --epochs_stage2 25 `
-#     --two_stage `
-#     --num_triplets 1 `
-#     --lr 1e-5 `
-#     --margin 1.0 `
-#     --model_name resnet18 `
-#     --freeze_blocks "0" `
-#     --agg_hidden_dim 128 `
-#     --agg_dropout 0.2 `
-#     --best_model_path "best_base_model.pt" `
-#     --device cuda `
-#     --distance_metric euclidean `
-#     --K 10 `
-#     --epoch_csv "epoch_metrics_base_model.csv" `
-#     --log_file "train_val.log"
-
-#-------------mit Hard Mining ohne Augmentierung auf Validierungsdate ----------------
-# python3.11 training\train_validate_model.py `
-#     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
-#     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\validation\nlst_subset_v5_validation.csv" `
-#     --data_root "D:\thesis_robert\subset_v5\NLST_subset_v5_nifti_3mm_Voxel" `
-#     --epochs_stage1 5 `
-#     --epochs_stage2 25 `
-#     --two_stage `
-#     --num_triplets 1 `
-#     --lr 1e-5 `
-#     --margin 1.0 `
-#     --model_name resnet18 `
-#     --freeze_blocks "0" `
-#     --agg_hidden_dim 128 `
-#     --agg_dropout 0.2 `
-#     --best_model_path "best_base_model.pt" `
-#     --device cuda `
-#     --distance_metric euclidean `
-#     --K 10 `
-#     --epoch_csv "epoch_metrics_base_model.csv" `
-#     --log_file "train_val.log"
 
 #-------------mit Hard Mining mit Augmentierung ----------------
 # python3.11 training\train_validate_model.py `
-#     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
-#     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
-#     --data_root "D:\thesis_robert\subset_v5\NLST_subset_v5_nifti_3mm_Voxel" `
+#     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\test_dataset_classification\v1\training\dataset_test_01_training.csv" `
+#     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\test_dataset_classification\v1\val\dataset_test_01_val.csv" `
+#     --data_root "D:\thesis_robert\subset_v5\NLST_subset_v5_nifti_1_5mm_Voxel" `
 #     --epochs_stage1 5 `
 #     --epochs_stage2 25 `
 #     --two_stage `
