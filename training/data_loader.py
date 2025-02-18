@@ -61,7 +61,7 @@ class SinglePatientDataset(data.Dataset):
         study_yr,
         roi_size=(96,96,3),
         overlap=(10,10,1),
-        skip_factor=2,
+        skip_factor=1,
         do_augmentation=False
     ):
         super().__init__()

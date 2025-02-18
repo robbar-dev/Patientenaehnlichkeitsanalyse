@@ -170,7 +170,7 @@ class TripletTrainer(nn.Module):
             study_yr=study_yr,
             roi_size=self.roi_size,
             overlap=self.overlap,
-            skip_factor=2,
+            skip_factor=1,
             do_augmentation=(self.do_augmentation if do_train else False)
         )
         loader = DataLoader(ds, batch_size=32, shuffle=False)
