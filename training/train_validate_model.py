@@ -195,7 +195,7 @@ if __name__=="__main__":
 #     --epochs_stage1 5 `
 #     --epochs_stage2 25 `
 #     --two_stage `
-#     --num_triplets 50 `
+#     --num_triplets 450 `
 #     --lr 1e-5 `
 #     --margin 1.0 `
 #     --model_name resnet18 `

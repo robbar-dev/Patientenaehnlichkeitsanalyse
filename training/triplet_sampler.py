@@ -4,72 +4,62 @@ DEBUG = False
 
 def parse_combo_string(combo_str):
     """
-    '0-1-1' -> (0,1,1)
+    Binäre Umsetzung:
+      Falls combo_str mit '1-0-0' beginnt => Klasse '1'
+      Ansonsten => Klasse '0'
     """
-    return tuple(int(x) for x in combo_str.split('-'))
+    if combo_str.startswith('1-0-0'):
+        return "1"
+    else:
+        return "0"
 
-def label_distance(a, b):
+class BinaryTripletSampler:
     """
-    a, b = Tupel, z. B. (0,1,1)
-    Distance = -#gemeinsamer1en
+    Ein Sampler für binäre Klassifikation (zwei Klassen "0" und "1").
+    
+    - Anchor & Positive kommen aus derselben Klasse
+    - Negative kommt aus der jeweils anderen Klasse.
     """
-    shared_ones = sum(x & y for x,y in zip(a,b))
-    return -shared_ones
-
-class TripletSampler:
 
     def __init__(
         self,
         df,
         num_triplets=1000,
-        shuffle=True,
-        top_k_negatives=3
+        shuffle=True
     ):
         self.df = df.copy()
         self.num_triplets = num_triplets
         self.shuffle = shuffle
-        self.top_k_negatives = top_k_negatives
 
-        # Dictionary: combo_str -> [ {pid, study_yr, combo, multi_label}, ... ]
-        self.labels_to_patients = {}
+        # Dictionary: "0" -> [ {...} ], "1" -> [ {...} ]
+        self.labels_to_patients = {"0": [], "1": []}
         for i, row in self.df.iterrows():
-            combo_str = row['combination']
-            # parse => multi_label
-            combo_tuple = parse_combo_string(combo_str)    # (0,1,1)
-            ml_vec = list(combo_tuple)                     # [0,1,1]
+            combo_bin = parse_combo_string(row['combination'])  # "0" oder "1"
+            # multi_label => [0] oder [1]
+            ml = [1] if combo_bin == "1" else [0]
 
             entry = {
                 'pid': row['pid'],
                 'study_yr': row['study_yr'],
-                'combo': combo_str,
-                'multi_label': ml_vec
+                'combo': combo_bin,      # "0" oder "1"
+                'multi_label': ml        # [0] oder [1]
             }
+            self.labels_to_patients[combo_bin].append(entry)
 
-            if combo_str not in self.labels_to_patients:
-                self.labels_to_patients[combo_str] = []
-            self.labels_to_patients[combo_str].append(entry)
+        # Wir haben nun 2 Keys: "0" und "1"
+        self.all_labels = ["0", "1"]
 
-        self.all_combos = list(self.labels_to_patients.keys())
-
-        # Shuffle Patient-Listen pro combo
+        # Optional Shuffle
         if self.shuffle:
-            for c in self.all_combos:
-                random.shuffle(self.labels_to_patients[c])
-
-        # Distanz-Ranking => wir verwenden label_distance(...) 
-        self.distRanking = {}
-        for c in self.all_combos:
-            c_tuple = parse_combo_string(c)
-            combos_sorted = sorted(
-                self.all_combos,
-                key=lambda other: label_distance(c_tuple, parse_combo_string(other)),
-                reverse=True
-            )
-            self.distRanking[c] = combos_sorted
+            for lb in self.all_labels:
+                random.shuffle(self.labels_to_patients[lb])
 
         self.used_triplets = set()
 
     def __iter__(self):
+        """
+        Generator, der Triplets (anchor_info, positive_info, negative_info) liefert.
+        """
         count = 0
         attempts = 0
         max_attempts = self.num_triplets * 20
@@ -77,47 +67,42 @@ class TripletSampler:
         while count < self.num_triplets and attempts < max_attempts:
             attempts += 1
 
-            # anchor combo
-            anchor_combo = random.choice(self.all_combos)
-            anchor_patients = self.labels_to_patients[anchor_combo]
-            if len(anchor_patients) < 1:
+            # Wähle zufällig eine Klasse für den Anchor
+            anchor_label = random.choice(self.all_labels)
+            anchor_patients = self.labels_to_patients[anchor_label]
+            if len(anchor_patients) < 2:
+                # Wir brauchen mind. 2 Patienten in derselben Klasse
                 continue
 
-            # anchor & positive
+            # Ziehe Anchor & Positive aus derselben Klasse
             anchor_info = random.choice(anchor_patients)
-            pos_info    = random.choice(anchor_patients)
+            positive_info = random.choice(anchor_patients)
 
-            # neg combo => wähle eine der unähnlichsten combos
-            ranking = self.distRanking[anchor_combo]
-            ranking_filtered = [rc for rc in ranking if rc != anchor_combo]
-            if not ranking_filtered:
-                continue
-
-            top_k = ranking_filtered[:self.top_k_negatives]
-            neg_combo = random.choice(top_k)
-            neg_patients = self.labels_to_patients[neg_combo]
+            # Negative kommt aus der anderen Klasse
+            negative_label = "1" if anchor_label == "0" else "0"
+            neg_patients = self.labels_to_patients[negative_label]
             if len(neg_patients) < 1:
                 continue
-            neg_info = random.choice(neg_patients)
 
-            # Triplet ID
+            negative_info = random.choice(neg_patients)
+
+            # Verhindere Duplikate
             trip_id = (
                 anchor_info['pid'],
-                pos_info['pid'],
-                neg_info['pid'],
-                anchor_combo,
-                neg_combo
+                positive_info['pid'],
+                negative_info['pid'],
+                anchor_label,
+                negative_label
             )
-
             if trip_id in self.used_triplets:
                 continue
 
             self.used_triplets.add(trip_id)
-            yield (anchor_info, pos_info, neg_info)
+            yield (anchor_info, positive_info, negative_info)
             count += 1
 
         if DEBUG:
-            print(f"[TripletSampler] Generated {count} triplets out of {attempts} attempts.")
+            print(f"[BinaryTripletSampler] Generated {count} triplets out of {attempts} attempts.")
 
     def __len__(self):
         return self.num_triplets
