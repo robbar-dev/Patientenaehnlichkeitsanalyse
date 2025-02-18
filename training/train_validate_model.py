@@ -170,7 +170,7 @@ def main():
     else:
         # 1-Stage normal
         best_map, best_epoch = trainer.train_with_val(
-            epochs=args.epochs_stage1,    # ggf. hier nur 1 Wert
+            epochs=args.epochs_stage1,   
             num_triplets=args.num_triplets,
             val_csv=args.val_csv,
             data_root_val=args.data_root,
@@ -187,7 +187,7 @@ def main():
 if __name__=="__main__":
     main()
 
-#-------------mit Hard Mining mit Augmentierung auf Trainingsdaten ----------------
+# -------------mit Hard Mining mit Augmentierung auf Trainingsdaten ----------------
 # python3.11 training\train_validate_model.py `
 #     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\training\nlst_subset_v7_training.csv" `
 #     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\validation\nlst_subset_v7_validation.csv" `
@@ -201,6 +201,7 @@ if __name__=="__main__":
 #     --model_name resnet18 `
 #     --freeze_blocks "0" `
 #     --agg_hidden_dim 128 `
+#     --lambda_bce 0.5 `
 #     --agg_dropout 0.4 `
 #     --do_augmentation `
 #     --best_model_path "best_base_model.pt" `

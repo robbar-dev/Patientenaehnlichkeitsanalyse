@@ -14,16 +14,10 @@ from sklearn.manifold import TSNE
 from training.triplet_sampler import BinaryTripletSampler
 from training.triplet_sampler_hard_negative import HardNegativeBinaryTripletSampler
 
-# IR-Metriken (Precision@K, Recall@K, mAP)
 from evaluation.metrics import compute_embeddings, compute_precision_recall_map
 
-# NEU: Binär-Metriken (ACC, AUC, ConfMatrix, ROC)
 from evaluation.binary_metrics import evaluate_binary_classification
 
-##################################################
-# alter parse_combo_str_to_vec wird nicht mehr benötigt,
-# falls du KEINE Multi-Label-Bits mehr brauchst.
-##################################################
 def parse_combo_str_to_label_binary(combo_str):
     """
     '1-0-0' => 1 (Abnormal)
@@ -37,12 +31,12 @@ def parse_combo_str_to_label_binary(combo_str):
 
 class TripletTrainer(nn.Module):
     """
-    Trainer für Binary-Klassifikation (Normal vs Abnormal),
+    Trainer für Binary-Klassifikation,
     plus TripletMarginLoss (Hard Negative Mining 2-stage),
     plus IR-Metriken (Precision@K, Recall@K, mAP),
     plus binäre Metriken (ACC, AUC, ConfusionMatrix, ROC).
     
-    Minimaler Umbau gegenüber Multi-Label-Version:
+    Umbau gegenüber Multi-Label-Version:
      - classifier = Linear(512, 1)
      - BCE => shape(1,1) pro Patient
      - evaluate_binary_classification(...) statt evaluate_multilabel_classification
@@ -67,7 +61,7 @@ class TripletTrainer(nn.Module):
         lambda_bce=1.0
     ):
         super().__init__()
-        self.df = df.copy()  # df-Kopie
+        self.df = df.copy()  
         self.data_root = data_root
         self.device = device
         self.lr = lr
@@ -82,7 +76,6 @@ class TripletTrainer(nn.Module):
         self.do_augmentation = do_augmentation
         self.lambda_bce = lambda_bce
 
-        # 1) CNN-Backbone
         from model.base_cnn import BaseCNN
         self.base_cnn = BaseCNN(
             model_name=self.model_name,
@@ -90,7 +83,6 @@ class TripletTrainer(nn.Module):
             freeze_blocks=self.freeze_blocks
         ).to(device)
 
-        # 2) Aggregator
         from model.mil_aggregator import AttentionMILAggregator
         from model.max_pooling import MaxPoolingAggregator
         from model.mean_pooling import MeanPoolingAggregator
@@ -108,23 +100,19 @@ class TripletTrainer(nn.Module):
         else:
             raise ValueError(f"Unbekannte aggregator_name={aggregator_name} - nutze 'mil','max' oder 'mean'.")
 
-        # 3) TripletLoss
         self.triplet_loss_fn = nn.TripletMarginLoss(margin=self.margin, p=2)
 
-        ##################################################
-        # => BINARY-Kopf => 1 Dimension
-        ##################################################
+        
+        # BINARY-Kopf => 1 Dimension
         self.classifier = nn.Linear(512, 1).to(device)
         self.bce_loss_fn = nn.BCEWithLogitsLoss()
 
-        # 4) Optimizer
         params = list(self.base_cnn.parameters()) \
                + list(self.mil_agg.parameters()) \
                + list(self.classifier.parameters())
         self.optimizer = optim.Adam(params, lr=self.lr)
 
-        # Verlaufs-Listen
-        self.epoch_losses = []          # Gesamt-Loss (Trip + BCE) pro Epoche
+        self.epoch_losses = []         
         self.epoch_triplet_losses = []  
         self.epoch_bce_losses = []      
 
@@ -135,15 +123,12 @@ class TripletTrainer(nn.Module):
             "mAP": []
         }
 
-        ##################################################
-        # NEU: Binäre Metriken => ACC, AUC => binclass_history
-        ##################################################
+        # Binäre Metriken
         self.binclass_history = {
             "acc": [],
             "auc": []
         }
 
-        # Best IR-mAP
         self.best_val_map = 0.0
         self.best_val_epoch = -1
 
@@ -153,7 +138,6 @@ class TripletTrainer(nn.Module):
                      f"agg_dropout={agg_dropout}, do_augmentation={do_augmentation}, "
                      f"lambda_bce={lambda_bce}")
 
-        # => optional: df-Umwandlung, falls Sampler 'multi_label' = [0 or 1]?
         self.df['multi_label'] = self.df['combination'].apply(
             lambda c: [parse_combo_str_to_label_binary(c)]
         )
@@ -310,10 +294,6 @@ class TripletTrainer(nn.Module):
         logging.info(f"Saved embedding plot => {fname}")
 
     def _train_one_epoch_internal(self, sampler):
-        """
-        HardNegative => identisch zur train_one_epoch,
-        nur externer Sampler (HardNegativeTripletSampler).
-        """
         total_loss = 0.0
         total_trip = 0.0
         total_bce  = 0.0
@@ -370,9 +350,6 @@ class TripletTrainer(nn.Module):
         logging.info(f"=> EPOCH Loss={avg_loss:.4f}, Trip={avg_trip:.4f}, BCE={avg_bce:.4f}")
 
     def train_loop(self, num_epochs=5, num_triplets=100):
-        """
-        Simpler Loop => normal Sampler
-        """
         sampler = BinaryTripletSampler(self.df, num_triplets, shuffle=True)
 
         for epoch in range(1,num_epochs+1):
@@ -394,7 +371,7 @@ class TripletTrainer(nn.Module):
         epoch_csv_path=None
     ):
         """
-        Single-Stage => am Ende jeder Epoche:
+        am Ende jeder Epoche:
           - IR (Precision,Recall,mAP)
           - Binary Evaluate => ACC, AUC + optional ConfMatrix/ROC
           - CSV-Log + Plots
@@ -424,7 +401,7 @@ class TripletTrainer(nn.Module):
             self.train_one_epoch(sampler)
             sampler.reset_epoch()
 
-            # 1) IR => Embeddings => IR metrics
+            # IR 
             emb_dict= compute_embeddings(self, df_val, data_root_val, device=self.device)
             val_metrics= compute_precision_recall_map(emb_dict,K=K,distance_metric=distance_metric)
             precK= val_metrics["precision@K"]
@@ -439,10 +416,9 @@ class TripletTrainer(nn.Module):
                 self.best_val_map= mapv
                 self.best_val_epoch= epoch
                 logging.info(f"=> New best mAP={mapv:.4f} @ epoch={epoch}")
-                # => Checkpoint
                 self.save_checkpoint("best_model.pt")
 
-            # 2) Binary Evaluate => ACC,AUC
+            # Binary Evaluate
             bin_res = evaluate_binary_classification(
                 trainer=self,
                 df=df_val,
@@ -458,7 +434,7 @@ class TripletTrainer(nn.Module):
             self.binclass_history["acc"].append(acc_val)
             self.binclass_history["auc"].append(auc_val)
 
-            # 3) t-SNE
+            # t-SNE
             if epoch%visualize_every==0:
                 self.visualize_embeddings(
                     df=df_val,
@@ -468,7 +444,6 @@ class TripletTrainer(nn.Module):
                     output_dir=output_dir
                 )
 
-            # 4) CSV-Log
             if epoch_csv_path:
                 self._write_epoch_csv_binary(epoch, epoch_csv_path,
                                              precK, recK, mapv,
@@ -476,7 +451,7 @@ class TripletTrainer(nn.Module):
 
         self.plot_loss_components(output_dir=output_dir)
         self.plot_metric_curves(output_dir=output_dir)
-        self.plot_acc_auc_curves(output_dir=output_dir)  # Neu => ACC/AUC
+        self.plot_acc_auc_curves(output_dir=output_dir) 
 
         return self.best_val_map,self.best_val_epoch
 
@@ -511,8 +486,8 @@ class TripletTrainer(nn.Module):
         epoch_csv_path=None
     ):
         """
-        2-Stage: Stage1 => normal Sampler, Stage2 => Hard Negative
-        Evaluate => IR + Binary => CSV => Checkpoint
+        2-Stage: Stage1 -> normal Sampler, Stage2 -> Hard Negative
+        Evaluate -> IR + Binary -> CSV -> Checkpoint
         """
         df_val = pd.read_csv(val_csv)
 
@@ -552,7 +527,7 @@ class TripletTrainer(nn.Module):
                 output_dir, epoch_csv_path
             )
 
-        # Stage2 => Hard Negative
+        # Stage2 -> Hard Negative
         for e in range(1,epochs_stage2+1):
             current_epoch+=1
             stage="Stage2"
@@ -627,7 +602,7 @@ class TripletTrainer(nn.Module):
         self.binclass_history["auc"].append(auc_val)
         logging.info(f"Binary => ACC={acc:.4f}, AUC={auc_val:.4f}")
 
-        # TSNE
+        # t-SNE
         if epoch%visualize_every==0:
             self.visualize_embeddings(df_val, data_root_val, visualize_method, epoch, output_dir)
 

@@ -19,8 +19,6 @@ def evaluate_binary_classification(
     """
     Führt eine binäre Evaluierung durch, basierend auf
     trainer.compute_patient_embedding(pid,study_yr) + trainer.classifier(...).
-    Annahme: 'combination' in df ist '1-0-0' => 1 (abnormal) und '0-0-1' => 0 (normal),
-    oder Du passt die Logik an deine CSV an.
 
     Returns:
       metrics: dict => {
@@ -42,8 +40,6 @@ def evaluate_binary_classification(
         study_yr = row['study_yr']
         combo_str = row['combination']
 
-        # => Mapping: '1-0-0' => 1, '0-0-1' => 0
-        # Du passt es an, falls Du noch andere Patterns hast
         if combo_str.startswith("1-0-0"):
             label = 1
         else:
@@ -52,12 +48,11 @@ def evaluate_binary_classification(
         with torch.no_grad():
             emb = trainer.compute_patient_embedding(pid, study_yr)  # => (1,512)
             logits = trainer.classifier(emb)  # => (1,1)
-            # => Sigmoid => Probability
             prob = torch.sigmoid(logits).item()  # => float
         y_true.append(label)
         y_scores.append(prob)
 
-    # Accuracy => threshold
+    # Accuracy 
     preds = [1 if s>=threshold else 0 for s in y_scores]
     correct = sum(p==gt for p,gt in zip(preds,y_true))
     acc = correct/len(y_true) if len(y_true)>0 else 0.0
@@ -74,7 +69,7 @@ def evaluate_binary_classification(
 
     logging.info(f"[BinaryEval] ACC={acc:.4f}, AUC={auc_val:.4f}")
 
-    # Optional: ROC-Kurve + CM plotten
+    # ROC-Kurve + CM plotten
     if do_plot_roc and len(unique_labels)>1:
         fpr, tpr, _ = roc_curve(y_true, y_scores)
         plot_roc_curve(fpr, tpr, auc_val, roc_plot_path)

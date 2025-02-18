@@ -4,9 +4,9 @@ DEBUG = False
 
 def parse_combo_string(combo_str):
     """
-    Binäre Umsetzung:
-      Falls combo_str mit '1-0-0' beginnt => Klasse '1'
-      Ansonsten => Klasse '0'
+    Für binäre Klassifikation:
+      combo_str '1-0-0'  => abnormale Lunge -> 1 
+      normale Lunge => Klasse '0'
     """
     if combo_str.startswith('1-0-0'):
         return "1"
@@ -15,7 +15,7 @@ def parse_combo_string(combo_str):
 
 class BinaryTripletSampler:
     """
-    Ein Sampler für binäre Klassifikation (zwei Klassen "0" und "1").
+    Binäre Klassifikation
     
     - Anchor & Positive kommen aus derselben Klasse
     - Negative kommt aus der jeweils anderen Klasse.
@@ -35,7 +35,6 @@ class BinaryTripletSampler:
         self.labels_to_patients = {"0": [], "1": []}
         for i, row in self.df.iterrows():
             combo_bin = parse_combo_string(row['combination'])  # "0" oder "1"
-            # multi_label => [0] oder [1]
             ml = [1] if combo_bin == "1" else [0]
 
             entry = {
@@ -46,10 +45,8 @@ class BinaryTripletSampler:
             }
             self.labels_to_patients[combo_bin].append(entry)
 
-        # Wir haben nun 2 Keys: "0" und "1"
         self.all_labels = ["0", "1"]
 
-        # Optional Shuffle
         if self.shuffle:
             for lb in self.all_labels:
                 random.shuffle(self.labels_to_patients[lb])
@@ -58,7 +55,7 @@ class BinaryTripletSampler:
 
     def __iter__(self):
         """
-        Generator, der Triplets (anchor_info, positive_info, negative_info) liefert.
+        generiert num_triplets Triplets (Anchor, Positive, Hard Negative)
         """
         count = 0
         attempts = 0
@@ -67,18 +64,14 @@ class BinaryTripletSampler:
         while count < self.num_triplets and attempts < max_attempts:
             attempts += 1
 
-            # Wähle zufällig eine Klasse für den Anchor
             anchor_label = random.choice(self.all_labels)
             anchor_patients = self.labels_to_patients[anchor_label]
             if len(anchor_patients) < 2:
-                # Wir brauchen mind. 2 Patienten in derselben Klasse
                 continue
 
-            # Ziehe Anchor & Positive aus derselben Klasse
             anchor_info = random.choice(anchor_patients)
             positive_info = random.choice(anchor_patients)
 
-            # Negative kommt aus der anderen Klasse
             negative_label = "1" if anchor_label == "0" else "0"
             neg_patients = self.labels_to_patients[negative_label]
             if len(neg_patients) < 1:
@@ -86,7 +79,7 @@ class BinaryTripletSampler:
 
             negative_info = random.choice(neg_patients)
 
-            # Verhindere Duplikate
+            # Triplet-ID, um Duplikate zu verhindern
             trip_id = (
                 anchor_info['pid'],
                 positive_info['pid'],
