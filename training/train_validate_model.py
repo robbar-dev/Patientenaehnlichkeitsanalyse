@@ -238,29 +238,12 @@ def _save_epoch_csv(epoch_csv, epoch, trainer, val_metrics):
 if __name__=="__main__":
     main()
 
-# python3.11 training\train_validate_model.py `
-#     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
-#     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
-#     --data_root "D:\thesis_robert\subset_v5\NLST_subset_v5_nifti_3mm_Voxel" `
-#     --epochs 30 `
-#     --num_triplets 1000 `
-#     --lr 1e-5 `
-#     --margin 1.0 `
-#     --model_name resnet18 `
-#     --freeze_blocks "0" `
-#     --agg_hidden_dim 128 `
-#     --agg_dropout 0.2 `
-#     --best_model_path "best_base_model.pt" `
-#     --device cuda `
-#     --distance_metric euclidean `
-#     --K 10 `
-#     --epoch_csv "epoch_metrics_base_model.csv" `
-#     --log_file "train_val.log"
 
+#---------------Overfitting Test-------------------
 # python3.11 training\train_validate_model.py `
 #     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
 #     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
-#     --data_root "D:\thesis_robert\subset_v5\NLST_subset_v5_SEG_NORM_nifti_1_5mm_Voxel_cropped_5_toleranz" `
+#     --data_root "D:\thesis_robert\subset_v5\NLST_subset_v5_nifti_1_5mm_Voxel" `
 #     --epochs 30 `
 #     --num_triplets 1000 `
 #     --lr 1e-5 `
@@ -276,6 +259,28 @@ if __name__=="__main__":
 #     --epoch_csv "epoch_metrics_base_model.csv" `
 #     --log_file "train_val.log"
 
+#---------------Augmentation auf Trainset-------------------
+# python3.11 training\train_validate_model.py `
+#     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
+#     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
+#     --data_root "D:\thesis_robert\subset_v5\NLST_subset_v5_nifti_3mm_Voxel" `
+#     --epochs 30 `
+#     --num_triplets 1000 `
+#     --lr 1e-5 `
+#     --margin 1.0 `
+#     --model_name resnet18 `
+#     --freeze_blocks "0,1" `
+#     --agg_hidden_dim 128 `
+#     --agg_dropout 0.4 `
+#     --do_augmentation `
+#     --best_model_path "best_base_model.pt" `
+#     --device cuda `
+#     --distance_metric euclidean `
+#     --K 10 `
+#     --epoch_csv "epoch_metrics_base_model.csv" `
+#     --log_file "train_val.log"
+
+#---------------Augmentation auf ValSet-------------------
 # python3.11 training\train_validate_model.py `
 #     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
 #     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\validation\nlst_subset_v5_validation.csv" `
@@ -287,11 +292,11 @@ if __name__=="__main__":
 #     --model_name resnet18 `
 #     --freeze_blocks "0,1" `
 #     --agg_hidden_dim 128 `
-#     --agg_dropout 0.2 `
+#     --agg_dropout 0.4 `
 #     --do_augmentation `
 #     --best_model_path "best_base_model.pt" `
 #     --device cuda `
 #     --distance_metric euclidean `
 #     --K 10 `
-#     --epoch_csv "epoch_metrics_base_model.csv" `
+#     --epoch_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\experimente\Overfitting\augmentation\on_val_data\epoch_metrics_base_model.csv" `
 #     --log_file "train_val.log"
