@@ -7,23 +7,20 @@ import numpy as np
 from glob import glob
 from tqdm import tqdm
 
-# Logging konfigurieren
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Eingabe- und Ausgabe-Pfade
 input_csv = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V3\nlst_subset_v3.csv"
 data_path = r"M:\public_data\tcia_ml\nlst\ct"
 failed_nifti_output = r"C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V3\subset_v3_failed_nifti.csv"
 output_path_niftidatein = r"D:\thesis_robert\NLST_subset_v3_series_nifti_unverarbeitet"
 
-# CSV-Datei einlesen
 logging.info("Lese die CSV-Datei ein...")
 df = pd.read_csv(input_csv)
 
 # Liste für fehlgeschlagene Konvertierungen
 failed_conversions = []
 
-# Funktion zur DICOM-zu-NIfTI-Konvertierung
+# DICOM-zu-NIfTI-Konvertierung
 def convert_dicom_to_nifti(dicom_folder, output_filename):
     try:
         dicom_files = glob(os.path.join(dicom_folder, "*.dcm"))
@@ -42,7 +39,7 @@ def convert_dicom_to_nifti(dicom_folder, output_filename):
         logging.error(f"Fehler bei der Konvertierung: {e}")
         return False
 
-# Verarbeitung aller Patienten mit Ladebalken
+# Verarbeitung aller Patienten
 for _, row in tqdm(df.iterrows(), total=len(df), desc="Verarbeite Patienten", unit="Patienten"):
     pid = str(row["pid"])
     study_yr = str(row["study_yr"])
@@ -74,17 +71,14 @@ for _, row in tqdm(df.iterrows(), total=len(df), desc="Verarbeite Patienten", un
         if glob(os.path.join(dicom_folder, "*.dcm")):
             break
     
-    # Ziel-Dateiname
     output_filename = os.path.join(output_path_niftidatein, f"pid_{pid}_study_yr_{study_yr}.nii.gz")
     
-    # Konvertierung durchführen
     if not convert_dicom_to_nifti(dicom_folder, output_filename):
         failed_conversions.append([pid, study_yr, "DICOM zu NIfTI Konvertierung fehlgeschlagen"])
         continue
     
     logging.info(f"Erfolgreich konvertiert: {output_filename}")
 
-# Fehlgeschlagene Konvertierungen speichern
 failed_df = pd.DataFrame(failed_conversions, columns=["pid", "study_yr", "Fehler"])
 failed_df.to_csv(failed_nifti_output, index=False)
 logging.info("Fehlgeschlagene Konvertierungen gespeichert.")

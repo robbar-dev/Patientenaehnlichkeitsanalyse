@@ -44,29 +44,29 @@ class AttentionMILAggregator(nn.Module):
         """
         # patch_embs shape: (N, in_dim)
 
-        # 1) Tanh-Pfad
+        # Tanh-Pfad
         u = torch.tanh(self.u_layer(patch_embs))  # => (N, hidden_dim)
 
-        # 2) Sigmoid-Pfad
+        # Sigmoid-Pfad
         v = torch.sigmoid(self.v_layer(patch_embs))  # => (N, hidden_dim)
 
-        # 3) Gating => elementweise Multiplikation
+        # Gating => elementweise Multiplikation
         # h shape: (N, hidden_dim)
         h = u * v
 
-        # 4) Dropout
+        # Dropout
         h = self.dropout(h)  # => (N, hidden_dim)
 
-        # 5) End-Scoring => w_layer(h) => shape (N,1), squeeze -> (N)
+        # End-Scoring => w_layer(h) => shape (N,1), squeeze -> (N)
         scores = self.w_layer(h).squeeze(-1)  # => (N)
 
-        # 6) Softmax => normalisierte Gewichte alpha
+        # Softmax => normalisierte Gewichte alpha
         alpha = F.softmax(scores, dim=0)      # => (N)
 
-        # 7) Gewichtete Summe über Patch-Embeddings
+        # Gewichtete Summe über Patch-Embeddings
         #    patch_embs * alpha => (N, in_dim), summiere -> (in_dim)
         weighted_emb = patch_embs * alpha.unsqueeze(-1)  # => (N, in_dim)
         patient_emb  = torch.sum(weighted_emb, dim=0)     # => (in_dim,)
 
-        # 8) (1, in_dim) zurückgeben
+        # (1, in_dim) zurückgeben
         return patient_emb.unsqueeze(0)

@@ -40,7 +40,7 @@ def remove_black_slices(volume_np):
 
     # Falls ALLE Slices schwarz sind:
     if first_non_zero is None or last_non_zero is None:
-        # Volumen komplett zurückgeben (nicht cropped)
+        # Volumen komplett zurückgeben
         return volume_np
 
     # Schneide die Slices weg, die komplett schwarz sind
@@ -51,7 +51,6 @@ def process_file(input_path, output_path):
     """
     Lädt eine NIfTI-Datei, entfernt schwarze Slices am Anfang und Ende, speichert das Ergebnis.
     """
-    # Lade NIfTI mit nibabel
     nii = nib.load(input_path)
     volume = nii.get_fdata()  # numpy array, float64 standard
     affine = nii.affine       # Transformation/Orientierung
@@ -60,10 +59,7 @@ def process_file(input_path, output_path):
     # volume hat typischerweise (H, W, D)
     volume_cropped = remove_black_slices(volume)
 
-    # Erzeuge neues NIfTI-Objekt
     new_nii = nib.Nifti1Image(volume_cropped, affine, header)
-
-    # Speichern
     nib.save(new_nii, output_path)
 
 def main():
@@ -95,7 +91,6 @@ def main():
         input_path = os.path.join(input_dir, filename)
         output_path = os.path.join(output_dir, filename)
 
-        # Prozess
         process_file(input_path, output_path)
 
 if __name__ == "__main__":

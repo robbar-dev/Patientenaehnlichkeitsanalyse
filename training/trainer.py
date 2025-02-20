@@ -61,7 +61,7 @@ class TripletTrainerBase(nn.Module):
         self.roi_size = roi_size
         self.overlap = overlap
 
-        # 1) CNN-Backbone
+        # CNN-Backbone
         from model.base_cnn import BaseCNN
         self.base_cnn = BaseCNN(
             model_name=self.model_name,
@@ -69,7 +69,7 @@ class TripletTrainerBase(nn.Module):
             freeze_blocks=self.freeze_blocks
         ).to(device)
 
-        # 2) Aggregator 
+        # Aggregator 
         from model.mil_aggregator import AttentionMILAggregator
         self.mil_agg = AttentionMILAggregator(
             in_dim=512,
@@ -77,14 +77,13 @@ class TripletTrainerBase(nn.Module):
             dropout=self.agg_dropout
         ).to(device)
 
-        # 3) TripletLoss
+        # TripletLoss
         self.triplet_loss_fn = nn.TripletMarginLoss(margin=self.margin, p=2)
 
-        # 4) Optimizer 
+        # Optimizer 
         params = list(self.base_cnn.parameters()) + list(self.mil_agg.parameters())
         self.optimizer = optim.Adam(params, lr=self.lr)
 
-        # Tracking
         self.epoch_losses = []          # Gesamt-Loss pro Epoche
         self.epoch_triplet_losses = []  # Nur Triplet-Loss pro Epoche
 
@@ -243,11 +242,11 @@ class TripletTrainerBase(nn.Module):
 
         for epoch in range(1, epochs+1):
             logging.info(f"=== EPOCH {epoch}/{epochs} ===")
-            # 1) train_one_epoch
+
             self.train_one_epoch(sampler)
             sampler.reset_epoch()
 
-            # 2) Evaluate => IR-Metriken (Precision@K, Recall@K, mAP)
+            # Evaluate => IR-Metriken
             emb_dict = compute_embeddings(
                 trainer=self,
                 df=df_val,
@@ -282,11 +281,9 @@ class TripletTrainerBase(nn.Module):
                     output_dir=output_dir
                 )
 
-            # 4) CSV-Logging
             if epoch_csv_path:
                 self._write_epoch_csv(epoch, epoch_csv_path)
 
-        # Plot Loss + IR-Kurven
         self.plot_loss_components(output_dir=output_dir)
         self.plot_metric_curves(output_dir=output_dir)
 
