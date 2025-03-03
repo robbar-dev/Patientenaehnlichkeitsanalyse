@@ -46,7 +46,7 @@ def visualize_sample_series(input_folder, total_samples, images_per_window=9):
 
             # Bild darstellen
             axes[i].imshow(image_slice.T, cmap="gray", origin="lower")
-            axes[i].set_title(f"Serie: {file}")
+            axes[i].set_title(f"Series: {file}")
             axes[i].axis("off")  # Achsen ausblenden
 
         # Nicht verwendete Subplots ausblenden
@@ -58,5 +58,5 @@ def visualize_sample_series(input_folder, total_samples, images_per_window=9):
 
 # Hauptprogramm
 if __name__ == "__main__":
-    input_folder = r"D:\thesis_robert\NLST_subset_v5_seg_nifti_1_5mm_Voxel_without_black_slices"
+    input_folder = r"D:\thesis_robert\subset_v5\NLST_subset_v5_nifti_3mm_Voxel"
     visualize_sample_series(input_folder, total_samples=18, images_per_window=9)

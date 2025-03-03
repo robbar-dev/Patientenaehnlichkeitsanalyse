@@ -12,7 +12,7 @@ Das Skript baut auf den Ergebnissen der test_resampling_noramlization.py Datei a
 
 # Laden der image_statistics.csv Datei mit spezifizierter Kodierung
 image_stats = pd.read_csv(
-    r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel\validation_resampling_normalization\image_statistics.csv",
+    r"D:\thesis_robert\subset_v3\NLST_subset_v3_nifti_1mm_Voxel\validation_resampling_normalization\image_statistics.csv",
     encoding='latin1'
 )
 
@@ -79,7 +79,7 @@ for column in ['Mean_Intensity', 'Median_Intensity', 'Std_Intensity']:
 
 # Speichern der Ausreißer in einer Textdatei
 if outlier_info:
-    output_file = r"D:\thesis_robert\NLST_subset_v4_nifti_3mm_Voxel\validation_resampling_normalization\outliers_summary.txt"
+    output_file = r"D:\thesis_robert\subset_v3\NLST_subset_v3_nifti_1mm_Voxel\validation_resampling_normalization\outliers_summary.txt"
     with open(output_file, 'w') as f:
         f.write("Liste der Ausreißer:\n")
         for info in outlier_info:
@@ -123,7 +123,8 @@ plt.show()
 # 5. Scatterplot: Bilddimensionen vs. Physische Größe
 plt.figure(figsize=(10, 6))
 plt.scatter(image_stats['Image_Shape_X'], image_stats['Physical_Size_X'], alpha=0.7)
-plt.title('Bilddimensionen X vs. Physische Größe X')
-plt.xlabel('Bilddimension X (Voxel)')
-plt.ylabel('Physische Größe X (mm)')
+plt.title('Image Dimensions X vs. Physical Size X')
+plt.xlabel('Image Dimension X (Voxel)')
+plt.ylabel('Physical Size X (mm)')
 plt.show()
+
