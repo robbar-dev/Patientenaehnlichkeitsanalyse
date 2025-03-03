@@ -84,7 +84,7 @@ class TripletTrainerBase(nn.Module):
 
         # 4) Optimizer
         params = list(self.base_cnn.parameters()) + list(self.mil_agg.parameters())
-        self.optimizer = optim.Adam(params, lr=self.lr)
+        self.optimizer = optim.Adam(params, lr=self.lr, weight_decay=1e-5)
 
         # Tracking
         self.epoch_losses = []          # Gesamt-Loss pro Epoche
