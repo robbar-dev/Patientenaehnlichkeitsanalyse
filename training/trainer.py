@@ -459,9 +459,9 @@ class TripletTrainer(nn.Module):
             if epoch_csv_path:
                 self._write_epoch_csv_ml(epoch, epoch_csv_path, precK, recK, map_val, fib_f1, emph_f1, nod_f1, mac_f1)
 
-        self.plot_loss_components(output_dir=output_dir)
-        self.plot_metric_curves(output_dir=output_dir)
-        self.plot_multilabel_f1_curves(output_dir=output_dir)
+        # self.plot_loss_components(output_dir=output_dir)
+        # self.plot_metric_curves(output_dir=output_dir)
+        # self.plot_multilabel_f1_curves(output_dir=output_dir)
 
         return self.best_val_map, self.best_val_epoch
 
@@ -578,9 +578,9 @@ class TripletTrainer(nn.Module):
                                          visualize_every, visualize_method, output_dir,
                                          stage_name, epoch_csv_path)
 
-        self.plot_loss_components(output_dir=output_dir)
-        self.plot_metric_curves(output_dir=output_dir)
-        self.plot_multilabel_f1_curves(output_dir=output_dir)
+        # self.plot_loss_components(output_dir=output_dir)
+        # self.plot_metric_curves(output_dir=output_dir)
+        # self.plot_multilabel_f1_curves(output_dir=output_dir)
 
         return self.best_val_map, self.best_val_epoch
 
