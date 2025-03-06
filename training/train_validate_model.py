@@ -254,18 +254,18 @@ if __name__=="__main__":
 #-------------mit Hard Mining mit Augmentierung ----------------
 # python3.11 training\train_validate_model.py `
 #     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
-#     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\training\nlst_subset_v5_training.csv" `
+#     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V5\validation\nlst_subset_v5_validation.csv" `
 #     --data_root "D:\thesis_robert\subset_v5\NLST_subset_v5_nifti_3mm_Voxel" `
 #     --epochs_stage1 5 `
 #     --epochs_stage2 25 `
 #     --two_stage `
-#     --num_triplets 1 `
+#     --num_triplets 1000 `
 #     --lr 1e-5 `
 #     --margin 1.0 `
 #     --model_name resnet18 `
-#     --freeze_blocks "0" `
+#     --freeze_blocks "0,1" `
 #     --agg_hidden_dim 128 `
-#     --agg_dropout 0.2 `
+#     --agg_dropout 0.4 `
 #     --do_augmentation `
 #     --best_model_path "best_base_model.pt" `
 #     --device cuda `
