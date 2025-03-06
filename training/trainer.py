@@ -224,7 +224,7 @@ class TripletTrainer(nn.Module):
             total_bce  += bce_loss.item()
             steps += 1
 
-            if step%250 == 0:
+            if step%50 == 0:
                 logging.info(f"[Step {step}] TotalLoss={loss.item():.4f}, Trip={trip_loss.item():.4f}, BCE={bce_loss.item():.4f}")
 
         if steps>0:
@@ -459,9 +459,9 @@ class TripletTrainer(nn.Module):
             if epoch_csv_path:
                 self._write_epoch_csv_ml(epoch, epoch_csv_path, precK, recK, map_val, fib_f1, emph_f1, nod_f1, mac_f1)
 
-        self.plot_loss_components(output_dir=output_dir)
-        self.plot_metric_curves(output_dir=output_dir)
-        self.plot_multilabel_f1_curves(output_dir=output_dir)
+        # self.plot_loss_components(output_dir=output_dir)
+        # self.plot_metric_curves(output_dir=output_dir)
+        # self.plot_multilabel_f1_curves(output_dir=output_dir)
 
         return self.best_val_map, self.best_val_epoch
 
@@ -578,9 +578,9 @@ class TripletTrainer(nn.Module):
                                          visualize_every, visualize_method, output_dir,
                                          stage_name, epoch_csv_path)
 
-        self.plot_loss_components(output_dir=output_dir)
-        self.plot_metric_curves(output_dir=output_dir)
-        self.plot_multilabel_f1_curves(output_dir=output_dir)
+        # self.plot_loss_components(output_dir=output_dir)
+        # self.plot_metric_curves(output_dir=output_dir)
+        # self.plot_multilabel_f1_curves(output_dir=output_dir)
 
         return self.best_val_map, self.best_val_epoch
 
