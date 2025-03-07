@@ -191,7 +191,7 @@ if __name__=="__main__":
 # python3.11 training\train_validate_model.py `
 #     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\training\nlst_subset_v7_training.csv" `
 #     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\validation\nlst_subset_v7_validation.csv" `
-#     --data_root "D:\thesis_robert\NLST_subset_v7" `
+#     --data_root "D:\thesis_robert\NLST_subset_v7_series" `
 #     --epochs_stage1 5 `
 #     --epochs_stage2 25 `
 #     --two_stage `

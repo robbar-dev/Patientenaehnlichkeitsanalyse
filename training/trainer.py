@@ -449,9 +449,9 @@ class TripletTrainer(nn.Module):
                                              precK, recK, mapv,
                                              acc_val, auc_val)
 
-        self.plot_loss_components(output_dir=output_dir)
-        self.plot_metric_curves(output_dir=output_dir)
-        self.plot_acc_auc_curves(output_dir=output_dir) 
+        #self.plot_loss_components(output_dir=output_dir)
+        #self.plot_metric_curves(output_dir=output_dir)
+        #self.plot_acc_auc_curves(output_dir=output_dir) 
 
         return self.best_val_map,self.best_val_epoch
 
@@ -549,10 +549,9 @@ class TripletTrainer(nn.Module):
                 output_dir, epoch_csv_path
             )
 
-        # Plots
-        self.plot_loss_components(output_dir=output_dir)
-        self.plot_metric_curves(output_dir=output_dir)
-        self.plot_acc_auc_curves(output_dir=output_dir)
+        #self.plot_loss_components(output_dir=output_dir)
+        #self.plot_metric_curves(output_dir=output_dir)
+        #self.plot_acc_auc_curves(output_dir=output_dir)
 
         return self.best_val_map,self.best_val_epoch
 
