@@ -234,7 +234,7 @@ class TripletTrainer(nn.Module):
             total_bce  += bce_loss.item()
             steps+=1
 
-            if step%250==0:
+            if step%50==0:
                 logging.info(f"[Step {step}] total={loss.item():.4f}, trip={trip_loss.item():.4f}, BCE={bce_loss.item():.4f}")
 
         if steps>0:

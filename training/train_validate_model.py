@@ -189,13 +189,13 @@ if __name__=="__main__":
 
 # -------------mit Hard Mining mit Augmentierung auf Trainingsdaten ----------------
 # python3.11 training\train_validate_model.py `
-#     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\training\nlst_subset_v7_training.csv" `
+#     --train_csv "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\training\nlst_subset_v7_training_series.csv" `
 #     --val_csv   "C:\Users\rbarbir\OneDrive - Brainlab AG\Dipl_Arbeit\Datensätze\Subsets\V7\validation\nlst_subset_v7_validation.csv" `
 #     --data_root "D:\thesis_robert\NLST_subset_v7_series" `
 #     --epochs_stage1 5 `
 #     --epochs_stage2 25 `
 #     --two_stage `
-#     --num_triplets 450 `
+#     --num_triplets 350 `
 #     --lr 1e-5 `
 #     --margin 1.0 `
 #     --model_name resnet18 `
